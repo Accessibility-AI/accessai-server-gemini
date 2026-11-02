@@ -1,0 +1,36 @@
+from pydantic_settings import BaseSettings
+from typing import Literal
+import os
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Literal
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    APP_ENV: str = "production"
+    DEBUG: bool = False
+    PORT: int = 8000
+    HOST: str = "0.0.0.0"
+    
+    # SQLite Database
+    DATABASE_PATH: str = "voice_intent.db"
+    
+    # LLM Provider configuration
+    LLM_PROVIDER: Literal["groq", "anthropic", "mock"] = "mock"
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    ANTHROPIC_API_KEY: str = ""
+    ANTHROPIC_MODEL: str = "claude-3-5-haiku-20241022"
+    
+    # Confidence threshold for intent routing
+    CONFIDENCE_THRESHOLD: float = 0.85
+    
+    # Token expiration in seconds
+    CONFIRMATION_TOKEN_TTL_SECONDS: int = 60
+    
+    # Ed25519 Key configuration (base64 private key or path)
+    ED25519_PRIVATE_KEY_B64: str = ""
+    JWKS_KID: str = "voice-intent-key-1"
+
+settings = Settings()

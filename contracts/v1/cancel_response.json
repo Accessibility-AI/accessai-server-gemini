@@ -1,0 +1,23 @@
+{
+  "properties": {
+    "status": {
+      "title": "Status",
+      "type": "string"
+    },
+    "confirmation_id": {
+      "title": "Confirmation Id",
+      "type": "string"
+    },
+    "spoken_prompt": {
+      "title": "Spoken Prompt",
+      "type": "string"
+    }
+  },
+  "required": [
+    "status",
+    "confirmation_id",
+    "spoken_prompt"
+  ],
+  "title": "CancelResponse",
+  "type": "object"
+}

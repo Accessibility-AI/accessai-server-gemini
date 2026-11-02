@@ -1,0 +1,34 @@
+{
+  "properties": {
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "status": {
+      "title": "Status",
+      "type": "string"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "title": "Metadata",
+      "type": "object"
+    },
+    "created_at": {
+      "title": "Created At",
+      "type": "integer"
+    },
+    "updated_at": {
+      "title": "Updated At",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "session_id",
+    "status",
+    "metadata",
+    "created_at",
+    "updated_at"
+  ],
+  "title": "SessionResponse",
+  "type": "object"
+}

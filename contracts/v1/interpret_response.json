@@ -1,0 +1,60 @@
+{
+  "properties": {
+    "type": {
+      "title": "Type",
+      "type": "string"
+    },
+    "intent": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Intent"
+    },
+    "params": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Params"
+    },
+    "confidence": {
+      "title": "Confidence",
+      "type": "number"
+    },
+    "spoken_prompt": {
+      "title": "Spoken Prompt",
+      "type": "string"
+    },
+    "clarification_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Clarification Reason"
+    }
+  },
+  "required": [
+    "type",
+    "confidence",
+    "spoken_prompt"
+  ],
+  "title": "InterpretResponse",
+  "type": "object"
+}

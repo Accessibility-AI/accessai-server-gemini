@@ -1,0 +1,24 @@
+{
+  "properties": {
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "action": {
+      "title": "Action",
+      "type": "string"
+    },
+    "params": {
+      "additionalProperties": true,
+      "title": "Params",
+      "type": "object"
+    }
+  },
+  "required": [
+    "session_id",
+    "action",
+    "params"
+  ],
+  "title": "PendingConfirmationRequest",
+  "type": "object"
+}

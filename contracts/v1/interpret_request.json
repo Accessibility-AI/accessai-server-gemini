@@ -1,0 +1,53 @@
+{
+  "properties": {
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "utterance": {
+      "title": "Utterance",
+      "type": "string"
+    },
+    "manifest": {
+      "description": "Allowed actions exposed by the host Android app",
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Manifest",
+      "type": "array"
+    },
+    "screen_descriptor": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Screen Descriptor"
+    },
+    "dialog_state": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Dialog State"
+    }
+  },
+  "required": [
+    "session_id",
+    "utterance",
+    "manifest"
+  ],
+  "title": "InterpretRequest",
+  "type": "object"
+}

@@ -1,0 +1,1022 @@
+[
+  {
+    "utterance": "abeg send 5k give David",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "David",
+    "expected_kobo": 500000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "send 10k to Chinedu",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Chinedu",
+    "expected_kobo": 1000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "transfer 20 grand to Amaka",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Amaka",
+    "expected_kobo": 2000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "oya wire 1.5k to Sarah",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Sarah",
+    "expected_kobo": 150000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "help me transfer N5000 give Mama",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Mama",
+    "expected_kobo": 500000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "dash \u20a65,000 give Emeka",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Emeka",
+    "expected_kobo": 500000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "pay 500 naira to Ngozi",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Ngozi",
+    "expected_kobo": 50000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "please send 2m naira to Femi",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Femi",
+    "expected_kobo": 200000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "abeg wire twenty thousand naira give Alhaji",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Alhaji",
+    "expected_kobo": 2000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "transfer 100k give Bola",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Bola",
+    "expected_kobo": 10000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "abeg send 50k give Tunde",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Tunde",
+    "expected_kobo": 5000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "send 2k to Blessing",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Blessing",
+    "expected_kobo": 200000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "transfer 15k to Ibrahim",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Ibrahim",
+    "expected_kobo": 1500000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "oya wire 2.5k to Chinwe",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Chinwe",
+    "expected_kobo": 250000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "help me transfer N10000 give Kelechi",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Kelechi",
+    "expected_kobo": 1000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "dash 1000 naira give Folake",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Folake",
+    "expected_kobo": 100000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "pay thirty thousand naira to Yusuf",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Yusuf",
+    "expected_kobo": 3000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "please send half a million naira to Ada",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Ada",
+    "expected_kobo": 50000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "abeg wire 500 naira 50 kobo give Obi",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Obi",
+    "expected_kobo": 50050,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "transfer 5 grand give Zainab",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Zainab",
+    "expected_kobo": 500000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "abeg send 5k give David",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "David",
+    "expected_kobo": 500000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "send 10k to Chinedu",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Chinedu",
+    "expected_kobo": 1000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "transfer 20 grand to Amaka",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Amaka",
+    "expected_kobo": 2000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "oya wire 1.5k to Sarah",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Sarah",
+    "expected_kobo": 150000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "help me transfer N5000 give Mama",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Mama",
+    "expected_kobo": 500000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "dash \u20a65,000 give Emeka",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Emeka",
+    "expected_kobo": 500000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "pay 500 naira to Ngozi",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Ngozi",
+    "expected_kobo": 50000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "please send 2m naira to Femi",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Femi",
+    "expected_kobo": 200000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "abeg wire twenty thousand naira give Alhaji",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Alhaji",
+    "expected_kobo": 2000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "transfer 100k give Bola",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Bola",
+    "expected_kobo": 10000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "abeg send 50k give Tunde",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Tunde",
+    "expected_kobo": 5000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "send 2k to Blessing",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Blessing",
+    "expected_kobo": 200000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "transfer 15k to Ibrahim",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Ibrahim",
+    "expected_kobo": 1500000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "oya wire 2.5k to Chinwe",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Chinwe",
+    "expected_kobo": 250000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "help me transfer N10000 give Kelechi",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Kelechi",
+    "expected_kobo": 1000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "dash 1000 naira give Folake",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Folake",
+    "expected_kobo": 100000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "pay thirty thousand naira to Yusuf",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Yusuf",
+    "expected_kobo": 3000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "please send half a million naira to Ada",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Ada",
+    "expected_kobo": 50000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "abeg wire 500 naira 50 kobo give Obi",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Obi",
+    "expected_kobo": 50050,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "transfer 5 grand give Zainab",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Zainab",
+    "expected_kobo": 500000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "abeg send 5k give David",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "David",
+    "expected_kobo": 500000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "send 10k to Chinedu",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Chinedu",
+    "expected_kobo": 1000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "transfer 20 grand to Amaka",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Amaka",
+    "expected_kobo": 2000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "oya wire 1.5k to Sarah",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Sarah",
+    "expected_kobo": 150000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "help me transfer N5000 give Mama",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Mama",
+    "expected_kobo": 500000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "dash \u20a65,000 give Emeka",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Emeka",
+    "expected_kobo": 500000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "pay 500 naira to Ngozi",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Ngozi",
+    "expected_kobo": 50000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "please send 2m naira to Femi",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Femi",
+    "expected_kobo": 200000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "abeg wire twenty thousand naira give Alhaji",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Alhaji",
+    "expected_kobo": 2000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "transfer 100k give Bola",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Bola",
+    "expected_kobo": 10000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "abeg send 50k give Tunde",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Tunde",
+    "expected_kobo": 5000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "send 2k to Blessing",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Blessing",
+    "expected_kobo": 200000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "transfer 15k to Ibrahim",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Ibrahim",
+    "expected_kobo": 1500000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "oya wire 2.5k to Chinwe",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Chinwe",
+    "expected_kobo": 250000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "help me transfer N10000 give Kelechi",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Kelechi",
+    "expected_kobo": 1000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "dash 1000 naira give Folake",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Folake",
+    "expected_kobo": 100000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "pay thirty thousand naira to Yusuf",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Yusuf",
+    "expected_kobo": 3000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "please send half a million naira to Ada",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Ada",
+    "expected_kobo": 50000000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "abeg wire 500 naira 50 kobo give Obi",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Obi",
+    "expected_kobo": 50050,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "transfer 5 grand give Zainab",
+    "expected_type": "action",
+    "expected_intent": "transfer_money",
+    "expected_recipient": "Zainab",
+    "expected_kobo": 500000,
+    "category": "valid_transfer"
+  },
+  {
+    "utterance": "wetin be my balance",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "how much dey inside my account",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "check my account balance for me",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "what is my account balance",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "check balance",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "how much remain for my account",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "view my balance",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "how much I get left",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "show my account balance",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "wetin dey my balance",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "abeg check balance",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "show me my balance",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "balance please",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "tell me how much is in my account",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "what is my current balance",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "oya check my account",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "how much remain",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "abeg how much dey my account",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "I want to see my balance",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "can you check my balance",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "what do I have in my account",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "check my money for me",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "how much balance do I have",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "wetin remain for inside",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "show account balance",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "abeg wetin be my balance",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "give me my balance",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "how much is left in my account",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "account balance inquiry",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "please check my balance",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "how much money dey there",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "check account balance",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "look my balance for me",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "balance check",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "how much I get",
+    "expected_type": "action",
+    "expected_intent": "get_balance",
+    "category": "valid_balance"
+  },
+  {
+    "utterance": "send 5k",
+    "expected_type": "clarification",
+    "expected_reason": "missing_recipient",
+    "category": "missing_recipient"
+  },
+  {
+    "utterance": "abeg transfer 10 grand",
+    "expected_type": "clarification",
+    "expected_reason": "missing_recipient",
+    "category": "missing_recipient"
+  },
+  {
+    "utterance": "wire twenty thousand naira",
+    "expected_type": "clarification",
+    "expected_reason": "missing_recipient",
+    "category": "missing_recipient"
+  },
+  {
+    "utterance": "oya pay 500 naira",
+    "expected_type": "clarification",
+    "expected_reason": "missing_recipient",
+    "category": "missing_recipient"
+  },
+  {
+    "utterance": "transfer 2m",
+    "expected_type": "clarification",
+    "expected_reason": "missing_recipient",
+    "category": "missing_recipient"
+  },
+  {
+    "utterance": "send 1.5k",
+    "expected_type": "clarification",
+    "expected_reason": "missing_recipient",
+    "category": "missing_recipient"
+  },
+  {
+    "utterance": "wire N5000",
+    "expected_type": "clarification",
+    "expected_reason": "missing_recipient",
+    "category": "missing_recipient"
+  },
+  {
+    "utterance": "help me send 50k",
+    "expected_type": "clarification",
+    "expected_reason": "missing_recipient",
+    "category": "missing_recipient"
+  },
+  {
+    "utterance": "abeg dash 2k",
+    "expected_type": "clarification",
+    "expected_reason": "missing_recipient",
+    "category": "missing_recipient"
+  },
+  {
+    "utterance": "pay 30k",
+    "expected_type": "clarification",
+    "expected_reason": "missing_recipient",
+    "category": "missing_recipient"
+  },
+  {
+    "utterance": "send 100k",
+    "expected_type": "clarification",
+    "expected_reason": "missing_recipient",
+    "category": "missing_recipient"
+  },
+  {
+    "utterance": "transfer 5 grand",
+    "expected_type": "clarification",
+    "expected_reason": "missing_recipient",
+    "category": "missing_recipient"
+  },
+  {
+    "utterance": "wire 15k",
+    "expected_type": "clarification",
+    "expected_reason": "missing_recipient",
+    "category": "missing_recipient"
+  },
+  {
+    "utterance": "please pay 2500 naira",
+    "expected_type": "clarification",
+    "expected_reason": "missing_recipient",
+    "category": "missing_recipient"
+  },
+  {
+    "utterance": "abeg send 500 naira",
+    "expected_type": "clarification",
+    "expected_reason": "missing_recipient",
+    "category": "missing_recipient"
+  },
+  {
+    "utterance": "transfer N20000",
+    "expected_type": "clarification",
+    "expected_reason": "missing_recipient",
+    "category": "missing_recipient"
+  },
+  {
+    "utterance": "wire half a million",
+    "expected_type": "clarification",
+    "expected_reason": "missing_recipient",
+    "category": "missing_recipient"
+  },
+  {
+    "utterance": "dash 10k",
+    "expected_type": "clarification",
+    "expected_reason": "missing_recipient",
+    "category": "missing_recipient"
+  },
+  {
+    "utterance": "send twenty thousand",
+    "expected_type": "clarification",
+    "expected_reason": "missing_recipient",
+    "category": "missing_recipient"
+  },
+  {
+    "utterance": "help me wire 5k",
+    "expected_type": "clarification",
+    "expected_reason": "missing_recipient",
+    "category": "missing_recipient"
+  },
+  {
+    "utterance": "send money to David",
+    "expected_type": "clarification",
+    "expected_reason": "missing_amount",
+    "category": "missing_amount"
+  },
+  {
+    "utterance": "abeg transfer to Chinedu",
+    "expected_type": "clarification",
+    "expected_reason": "missing_amount",
+    "category": "missing_amount"
+  },
+  {
+    "utterance": "wire some money to Amaka",
+    "expected_type": "clarification",
+    "expected_reason": "missing_amount",
+    "category": "missing_amount"
+  },
+  {
+    "utterance": "oya pay Sarah",
+    "expected_type": "clarification",
+    "expected_reason": "missing_amount",
+    "category": "missing_amount"
+  },
+  {
+    "utterance": "help me dash Mama",
+    "expected_type": "clarification",
+    "expected_reason": "missing_amount",
+    "category": "missing_amount"
+  },
+  {
+    "utterance": "transfer give Emeka",
+    "expected_type": "clarification",
+    "expected_reason": "missing_amount",
+    "category": "missing_amount"
+  },
+  {
+    "utterance": "send cash to Ngozi",
+    "expected_type": "clarification",
+    "expected_reason": "missing_amount",
+    "category": "missing_amount"
+  },
+  {
+    "utterance": "wire money to Femi",
+    "expected_type": "clarification",
+    "expected_reason": "missing_amount",
+    "category": "missing_amount"
+  },
+  {
+    "utterance": "pay Alhaji money",
+    "expected_type": "clarification",
+    "expected_reason": "missing_amount",
+    "category": "missing_amount"
+  },
+  {
+    "utterance": "abeg send money to Bola",
+    "expected_type": "clarification",
+    "expected_reason": "missing_amount",
+    "category": "missing_amount"
+  },
+  {
+    "utterance": "transfer money to Tunde",
+    "expected_type": "clarification",
+    "expected_reason": "missing_amount",
+    "category": "missing_amount"
+  },
+  {
+    "utterance": "send cash to Blessing",
+    "expected_type": "clarification",
+    "expected_reason": "missing_amount",
+    "category": "missing_amount"
+  },
+  {
+    "utterance": "wire money give Ibrahim",
+    "expected_type": "clarification",
+    "expected_reason": "missing_amount",
+    "category": "missing_amount"
+  },
+  {
+    "utterance": "abeg transfer to Chinwe",
+    "expected_type": "clarification",
+    "expected_reason": "missing_amount",
+    "category": "missing_amount"
+  },
+  {
+    "utterance": "pay Kelechi",
+    "expected_type": "clarification",
+    "expected_reason": "missing_amount",
+    "category": "missing_amount"
+  },
+  {
+    "utterance": "dash money give Folake",
+    "expected_type": "clarification",
+    "expected_reason": "missing_amount",
+    "category": "missing_amount"
+  },
+  {
+    "utterance": "send money to Yusuf",
+    "expected_type": "clarification",
+    "expected_reason": "missing_amount",
+    "category": "missing_amount"
+  },
+  {
+    "utterance": "wire to Ada",
+    "expected_type": "clarification",
+    "expected_reason": "missing_amount",
+    "category": "missing_amount"
+  },
+  {
+    "utterance": "transfer to Obi",
+    "expected_type": "clarification",
+    "expected_reason": "missing_amount",
+    "category": "missing_amount"
+  },
+  {
+    "utterance": "oya pay Zainab",
+    "expected_type": "clarification",
+    "expected_reason": "missing_amount",
+    "category": "missing_amount"
+  },
+  {
+    "utterance": "book a flight to Abuja",
+    "expected_type": "clarification",
+    "expected_reason": "unknown_tool",
+    "category": "out_of_scope"
+  },
+  {
+    "utterance": "what is the weather in Lagos today",
+    "expected_type": "clarification",
+    "expected_reason": "unknown_tool",
+    "category": "out_of_scope"
+  },
+  {
+    "utterance": "play some afrobeat music",
+    "expected_type": "clarification",
+    "expected_reason": "unknown_tool",
+    "category": "out_of_scope"
+  },
+  {
+    "utterance": "tell me a joke",
+    "expected_type": "clarification",
+    "expected_reason": "unknown_tool",
+    "category": "out_of_scope"
+  },
+  {
+    "utterance": "call customer care",
+    "expected_type": "clarification",
+    "expected_reason": "unknown_tool",
+    "category": "out_of_scope"
+  },
+  {
+    "utterance": "order pizza for me",
+    "expected_type": "clarification",
+    "expected_reason": "unknown_tool",
+    "category": "out_of_scope"
+  },
+  {
+    "utterance": "who won the football match yesterday",
+    "expected_type": "clarification",
+    "expected_reason": "unknown_tool",
+    "category": "out_of_scope"
+  },
+  {
+    "utterance": "open google maps",
+    "expected_type": "clarification",
+    "expected_reason": "unknown_tool",
+    "category": "out_of_scope"
+  },
+  {
+    "utterance": "what time is it in London",
+    "expected_type": "clarification",
+    "expected_reason": "unknown_tool",
+    "category": "out_of_scope"
+  },
+  {
+    "utterance": "set an alarm for 6am tomorrow",
+    "expected_type": "clarification",
+    "expected_reason": "unknown_tool",
+    "category": "out_of_scope"
+  },
+  {
+    "utterance": "buy groceries online",
+    "expected_type": "clarification",
+    "expected_reason": "unknown_tool",
+    "category": "out_of_scope"
+  },
+  {
+    "utterance": "what is the capital of Nigeria",
+    "expected_type": "clarification",
+    "expected_reason": "unknown_tool",
+    "category": "out_of_scope"
+  },
+  {
+    "utterance": "read my text messages",
+    "expected_type": "clarification",
+    "expected_reason": "unknown_tool",
+    "category": "out_of_scope"
+  },
+  {
+    "utterance": "how far my guy",
+    "expected_type": "clarification",
+    "expected_reason": "unknown_tool",
+    "category": "out_of_scope"
+  },
+  {
+    "utterance": "take a selfie",
+    "expected_type": "clarification",
+    "expected_reason": "unknown_tool",
+    "category": "out_of_scope"
+  }
+]

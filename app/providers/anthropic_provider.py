@@ -1,0 +1,75 @@
+import json
+from typing import Any, Dict, List, Optional
+from anthropic import AsyncAnthropic
+from app.config import settings
+from app.providers.base import BaseLLMProvider, LLMInterpretationResult, ToolCall
+
+ANTHROPIC_SYSTEM_PROMPT = """You are a voice intent interpreter for a blind or low-vision fintech Android app in Nigeria.
+Your job is to parse the user's spoken utterance and invoke the matching tool from the available tools list.
+
+CRITICAL RULES:
+1. Utterances may be in Standard English, Nigerian English, or Nigerian Pidgin (e.g. "abeg send 5k give David", "wetin be my balance", "oya wire 10 grand to Amaka", "transfer 20k to Chinedu").
+2. For transfer amounts:
+   - Extract the EXACT raw text spoken by the user into 'amount_raw' (e.g. "5k", "five thousand naira", "20 grand", "1.5m", "N5000").
+   - If you can determine the numeric value in Naira, provide it in 'amount_numeric_estimate' (e.g. 5000 for 5k). If unsure, leave it null.
+   - NEVER invent or guess an amount. If the user did not say an amount, do NOT guess.
+3. For recipient:
+   - Extract ONLY the explicitly spoken recipient name into 'recipient' (e.g. "David", "Mama", "Chinedu").
+   - NEVER guess or invent a recipient. If none was specified, leave it empty or null.
+4. If the request does not clearly match any available tool or is completely outside the banking app scope, do not call any tool.
+"""
+
+class AnthropicProvider(BaseLLMProvider):
+    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
+        self.api_key = api_key or settings.ANTHROPIC_API_KEY
+        self.model = model or settings.ANTHROPIC_MODEL
+        self.client = AsyncAnthropic(api_key=self.api_key) if self.api_key else None
+
+    async def interpret(
+        self,
+        utterance: str,
+        manifest: List[Dict[str, Any]],
+        screen_descriptor: Optional[str] = None,
+        dialog_state: Optional[Dict[str, Any]] = None
+    ) -> LLMInterpretationResult:
+        if not self.client:
+            raise ValueError("Anthropic API key not configured")
+
+        tools = []
+        for action in manifest:
+            tools.append({
+                "name": action["name"],
+                "description": action.get("description", ""),
+                "input_schema": action.get("parameters", {"type": "object", "properties": {}})
+            })
+
+        user_content = f"Utterance: {utterance}"
+        if screen_descriptor:
+            user_content += f"\nCurrent Screen: {screen_descriptor}"
+        if dialog_state:
+            user_content += f"\nDialog Context: {json.dumps(dialog_state)}"
+
+        response = await self.client.messages.create(
+            model=self.model,
+            max_tokens=1024,
+            system=ANTHROPIC_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_content}],
+            tools=tools
+        )
+
+        tool_calls_out = []
+        text_content = ""
+        for block in response.content:
+            if block.type == "tool_use":
+                tool_calls_out.append(ToolCall(name=block.name, arguments=block.input))
+            elif block.type == "text":
+                text_content += block.text
+
+        confidence = 0.96 if tool_calls_out else 0.5
+
+        return LLMInterpretationResult(
+            tool_calls=tool_calls_out,
+            confidence=confidence,
+            text_content=text_content,
+            raw_response=response
+        )

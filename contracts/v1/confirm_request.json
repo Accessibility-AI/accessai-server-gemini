@@ -1,0 +1,13 @@
+{
+  "properties": {
+    "utterance": {
+      "title": "Utterance",
+      "type": "string"
+    }
+  },
+  "required": [
+    "utterance"
+  ],
+  "title": "ConfirmRequest",
+  "type": "object"
+}

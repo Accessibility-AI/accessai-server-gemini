@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: voice-intent-service
+    runtime: docker
+    plan: starter
+    region: oregon
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: APP_ENV
+        value: production
+      - key: LLM_PROVIDER
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: CONFIRMATION_TOKEN_TTL_SECONDS
+        value: 60

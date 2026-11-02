@@ -1,0 +1,44 @@
+{
+  "properties": {
+    "confirmation_id": {
+      "title": "Confirmation Id",
+      "type": "string"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "action": {
+      "title": "Action",
+      "type": "string"
+    },
+    "params": {
+      "additionalProperties": true,
+      "title": "Params",
+      "type": "object"
+    },
+    "status": {
+      "title": "Status",
+      "type": "string"
+    },
+    "spoken_prompt": {
+      "title": "Spoken Prompt",
+      "type": "string"
+    },
+    "expires_at": {
+      "title": "Expires At",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "confirmation_id",
+    "session_id",
+    "action",
+    "params",
+    "status",
+    "spoken_prompt",
+    "expires_at"
+  ],
+  "title": "PendingConfirmationResponse",
+  "type": "object"
+}

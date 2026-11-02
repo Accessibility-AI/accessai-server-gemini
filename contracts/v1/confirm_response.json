@@ -1,0 +1,33 @@
+{
+  "properties": {
+    "status": {
+      "title": "Status",
+      "type": "string"
+    },
+    "confirmation_id": {
+      "title": "Confirmation Id",
+      "type": "string"
+    },
+    "token": {
+      "title": "Token",
+      "type": "string"
+    },
+    "expires_at": {
+      "title": "Expires At",
+      "type": "integer"
+    },
+    "spoken_prompt": {
+      "title": "Spoken Prompt",
+      "type": "string"
+    }
+  },
+  "required": [
+    "status",
+    "confirmation_id",
+    "token",
+    "expires_at",
+    "spoken_prompt"
+  ],
+  "title": "ConfirmResponse",
+  "type": "object"
+}
