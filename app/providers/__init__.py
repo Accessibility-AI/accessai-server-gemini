@@ -1,10 +1,11 @@
 from app.config import settings
+from app.providers.anthropic_provider import AnthropicProvider
 from app.providers.base import BaseLLMProvider
 from app.providers.groq_provider import GroqProvider
-from app.providers.anthropic_provider import AnthropicProvider
 from app.providers.mock_provider import MockLLMProvider
 
-def get_llm_provider(name: str = None) -> BaseLLMProvider:
+
+def get_llm_provider(name: str | None = None) -> BaseLLMProvider:
     provider_name = (name or settings.LLM_PROVIDER).lower()
     if provider_name == "groq":
         return GroqProvider()

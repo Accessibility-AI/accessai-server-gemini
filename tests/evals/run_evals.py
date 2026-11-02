@@ -1,20 +1,20 @@
 import asyncio
 import json
-import sys
 import os
+import sys
+from typing import Any
 
 # Ensure current directory is on python path
 sys.path.insert(0, os.path.abspath("."))
 
-from typing import Dict, Any, List
-from app.services.interpreter import InterpreterService
 from app.providers.mock_provider import MockLLMProvider
+from app.services.interpreter import InterpreterService
 
 MANIFEST = [
     {
         "name": "get_balance",
         "description": "Check current account balance",
-        "parameters": {"type": "object", "properties": {}}
+        "parameters": {"type": "object", "properties": {}},
     },
     {
         "name": "transfer_money",
@@ -24,28 +24,32 @@ MANIFEST = [
             "properties": {
                 "amount_raw": {"type": "string"},
                 "amount_numeric_estimate": {"type": "number"},
-                "recipient": {"type": "string"}
+                "recipient": {"type": "string"},
             },
-            "required": ["amount_raw", "recipient"]
-        }
-    }
+            "required": ["amount_raw", "recipient"],
+        },
+    },
 ]
 
-async def run_evals():
-    with open("tests/evals/dataset.json", "r", encoding="utf-8") as f:
-        dataset: List[Dict[str, Any]] = json.load(f)
 
+def load_dataset() -> list[dict[str, Any]]:
+    with open("tests/evals/dataset.json", encoding="utf-8") as f:
+        return json.load(f)
+
+
+async def run_evals() -> bool:
+    dataset = load_dataset()
     provider = MockLLMProvider()
     service = InterpreterService(provider=provider)
 
     total = len(dataset)
     correct_intent = 0
     guessed_transfers = 0
-    category_stats = {}
+    category_stats: dict[str, dict[str, int]] = {}
 
-    print(f"\n=======================================================")
+    print("\n=======================================================")
     print(f"RUNNING EVALUATION ON {total} UTTERANCES")
-    print(f"=======================================================\n")
+    print("=======================================================\n")
 
     for item in dataset:
         utterance = item["utterance"]
@@ -55,8 +59,7 @@ async def run_evals():
         category_stats[cat]["total"] += 1
 
         result = await service.interpret_utterance(
-            utterance=utterance,
-            manifest=MANIFEST
+            utterance=utterance, manifest=MANIFEST
         )
 
         is_correct = False
@@ -81,21 +84,27 @@ async def run_evals():
             elif result.type == "action" and result.intent == "transfer_money":
                 # Critical violation: transfer emitted when clarification was required!
                 guessed_transfers += 1
-                print(f"CRITICAL SAFETY VIOLATION: Transfer emitted for utterance: '{utterance}'")
+                print(
+                    f"CRITICAL SAFETY VIOLATION: Transfer emitted for utterance: '{utterance}'"
+                )
                 print(f"Params: {result.params}")
 
         if is_correct:
             correct_intent += 1
             category_stats[cat]["correct"] += 1
         else:
-            print(f"FAILED: '{utterance}' (Cat: {cat}) -> got {result.type}:{result.intent}, expected {item['expected_type']}:{item.get('expected_intent')}")
+            print(
+                f"FAILED: '{utterance}' (Cat: {cat}) -> got {result.type}:{result.intent}, expected {item['expected_type']}:{item.get('expected_intent')}"
+            )
 
     accuracy_pct = (correct_intent / total) * 100
 
     print("\n---------------- CATEGORY BREAKDOWN ----------------")
     for cat, stats in category_stats.items():
         cat_acc = (stats["correct"] / stats["total"]) * 100
-        print(f"  {cat.ljust(22)}: {stats['correct']}/{stats['total']} ({cat_acc:.1f}%)")
+        print(
+            f"  {cat.ljust(22)}: {stats['correct']}/{stats['total']} ({cat_acc:.1f}%)"
+        )
 
     print("\n---------------- FINAL EVAL RESULTS ----------------")
     print(f"Total Utterances Evaluated : {total}")
@@ -110,13 +119,16 @@ async def run_evals():
         print("PASS: Intent accuracy met (>= 95%)!")
 
     if guessed_transfers > 0:
-        print("FAIL: Zero-tolerance violation: transfers were emitted with guessed recipient/amount!")
+        print(
+            "FAIL: Zero-tolerance violation: transfers were emitted with guessed recipient/amount!"
+        )
         success = False
     else:
         print("PASS: Zero transfers emitted with guessed recipient or amount!")
 
     print("=======================================================\n")
     return success
+
 
 if __name__ == "__main__":
     success = asyncio.run(run_evals())

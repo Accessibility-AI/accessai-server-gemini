@@ -1,6 +1,8 @@
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from anthropic import AsyncAnthropic
+
 from app.config import settings
 from app.providers.base import BaseLLMProvider, LLMInterpretationResult, ToolCall
 
@@ -19,8 +21,9 @@ CRITICAL RULES:
 4. If the request does not clearly match any available tool or is completely outside the banking app scope, do not call any tool.
 """
 
+
 class AnthropicProvider(BaseLLMProvider):
-    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
+    def __init__(self, api_key: str | None = None, model: str | None = None):
         self.api_key = api_key or settings.ANTHROPIC_API_KEY
         self.model = model or settings.ANTHROPIC_MODEL
         self.client = AsyncAnthropic(api_key=self.api_key) if self.api_key else None
@@ -28,20 +31,24 @@ class AnthropicProvider(BaseLLMProvider):
     async def interpret(
         self,
         utterance: str,
-        manifest: List[Dict[str, Any]],
-        screen_descriptor: Optional[str] = None,
-        dialog_state: Optional[Dict[str, Any]] = None
+        manifest: list[dict[str, Any]],
+        screen_descriptor: str | None = None,
+        dialog_state: dict[str, Any] | None = None,
     ) -> LLMInterpretationResult:
         if not self.client:
             raise ValueError("Anthropic API key not configured")
 
         tools = []
         for action in manifest:
-            tools.append({
-                "name": action["name"],
-                "description": action.get("description", ""),
-                "input_schema": action.get("parameters", {"type": "object", "properties": {}})
-            })
+            tools.append(
+                {
+                    "name": action["name"],
+                    "description": action.get("description", ""),
+                    "input_schema": action.get(
+                        "parameters", {"type": "object", "properties": {}}
+                    ),
+                }
+            )
 
         user_content = f"Utterance: {utterance}"
         if screen_descriptor:
@@ -54,7 +61,7 @@ class AnthropicProvider(BaseLLMProvider):
             max_tokens=1024,
             system=ANTHROPIC_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_content}],
-            tools=tools
+            tools=tools,
         )
 
         tool_calls_out = []
@@ -71,5 +78,5 @@ class AnthropicProvider(BaseLLMProvider):
             tool_calls=tool_calls_out,
             confidence=confidence,
             text_content=text_content,
-            raw_response=response
+            raw_response=response,
         )

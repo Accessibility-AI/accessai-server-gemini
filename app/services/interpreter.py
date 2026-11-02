@@ -1,20 +1,24 @@
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from pydantic import BaseModel
+
 from app.config import settings
-from app.providers.base import BaseLLMProvider
 from app.parsers.amount_parser import parse_amount_to_kobo, verify_amount_agreement
+from app.providers.base import BaseLLMProvider
 from app.templates.speech import (
+    build_clarification_prompt,
     build_transfer_confirmation_prompt,
-    build_clarification_prompt
 )
+
 
 class InterpretResponse(BaseModel):
     type: str  # "action" or "clarification"
-    intent: Optional[str] = None
-    params: Optional[Dict[str, Any]] = None
+    intent: str | None = None
+    params: dict[str, Any] | None = None
     confidence: float
     spoken_prompt: str
-    clarification_reason: Optional[str] = None
+    clarification_reason: str | None = None
+
 
 class InterpreterService:
     def __init__(self, provider: BaseLLMProvider):
@@ -23,9 +27,9 @@ class InterpreterService:
     async def interpret_utterance(
         self,
         utterance: str,
-        manifest: List[Dict[str, Any]],
-        screen_descriptor: Optional[str] = None,
-        dialog_state: Optional[Dict[str, Any]] = None
+        manifest: list[dict[str, Any]],
+        screen_descriptor: str | None = None,
+        dialog_state: dict[str, Any] | None = None,
     ) -> InterpretResponse:
         """
         Interprets a user utterance against the allowed action manifest.
@@ -37,15 +41,24 @@ class InterpreterService:
         sanitized_dialog_state = None
         if dialog_state:
             sanitized_dialog_state = {
-                k: v for k, v in dialog_state.items()
-                if k not in ["balance", "beneficiaries", "account_number", "pin", "bvn", "password"]
+                k: v
+                for k, v in dialog_state.items()
+                if k
+                not in [
+                    "balance",
+                    "beneficiaries",
+                    "account_number",
+                    "pin",
+                    "bvn",
+                    "password",
+                ]
             }
 
         llm_result = await self.provider.interpret(
             utterance=utterance,
             manifest=manifest,
             screen_descriptor=screen_descriptor,
-            dialog_state=sanitized_dialog_state
+            dialog_state=sanitized_dialog_state,
         )
 
         manifest_map = {item["name"]: item for item in manifest}
@@ -57,7 +70,7 @@ class InterpreterService:
                 type="clarification",
                 confidence=llm_result.confidence,
                 spoken_prompt=prompt,
-                clarification_reason="low_confidence"
+                clarification_reason="low_confidence",
             )
 
         # 2. Check tool call count
@@ -67,7 +80,7 @@ class InterpreterService:
                 type="clarification",
                 confidence=llm_result.confidence,
                 spoken_prompt=prompt,
-                clarification_reason="unknown_tool"
+                clarification_reason="unknown_tool",
             )
 
         if len(llm_result.tool_calls) > 1:
@@ -76,7 +89,7 @@ class InterpreterService:
                 type="clarification",
                 confidence=llm_result.confidence,
                 spoken_prompt=prompt,
-                clarification_reason="multiple_tools"
+                clarification_reason="multiple_tools",
             )
 
         tool_call = llm_result.tool_calls[0]
@@ -90,7 +103,7 @@ class InterpreterService:
                 type="clarification",
                 confidence=llm_result.confidence,
                 spoken_prompt=prompt,
-                clarification_reason="unknown_tool"
+                clarification_reason="unknown_tool",
             )
 
         # 4. Handle money transfer validation
@@ -99,9 +112,16 @@ class InterpreterService:
             if recipient:
                 recipient = str(recipient).strip()
                 # Reject placeholders
-                if recipient.lower() in ["someone", "person", "recipient", "anybody", "user", "none"]:
+                if recipient.lower() in [
+                    "someone",
+                    "person",
+                    "recipient",
+                    "anybody",
+                    "user",
+                    "none",
+                ]:
                     recipient = None
-                    
+
             amount_raw = tool_args.get("amount_raw")
             if amount_raw:
                 amount_raw = str(amount_raw).strip()
@@ -114,7 +134,7 @@ class InterpreterService:
                     intent=tool_name,
                     confidence=llm_result.confidence,
                     spoken_prompt=prompt,
-                    clarification_reason="missing_amount_and_recipient"
+                    clarification_reason="missing_amount_and_recipient",
                 )
 
             if not recipient:
@@ -124,17 +144,19 @@ class InterpreterService:
                     intent=tool_name,
                     confidence=llm_result.confidence,
                     spoken_prompt=prompt,
-                    clarification_reason="missing_recipient"
+                    clarification_reason="missing_recipient",
                 )
 
             if not amount_raw:
-                prompt = build_clarification_prompt("missing_amount", recipient=recipient)
+                prompt = build_clarification_prompt(
+                    "missing_amount", recipient=recipient
+                )
                 return InterpretResponse(
                     type="clarification",
                     intent=tool_name,
                     confidence=llm_result.confidence,
                     spoken_prompt=prompt,
-                    clarification_reason="missing_amount"
+                    clarification_reason="missing_amount",
                 )
 
             # Deterministic parsing to kobo
@@ -146,7 +168,7 @@ class InterpreterService:
                     intent=tool_name,
                     confidence=llm_result.confidence,
                     spoken_prompt=prompt,
-                    clarification_reason="unparseable_amount"
+                    clarification_reason="unparseable_amount",
                 )
 
             # Cross-check against LLM's numeric estimate if provided
@@ -161,7 +183,7 @@ class InterpreterService:
                             intent=tool_name,
                             confidence=llm_result.confidence,
                             spoken_prompt=prompt,
-                            clarification_reason="amount_mismatch"
+                            clarification_reason="amount_mismatch",
                         )
                 except (ValueError, TypeError):
                     prompt = build_clarification_prompt("amount_mismatch")
@@ -170,14 +192,14 @@ class InterpreterService:
                         intent=tool_name,
                         confidence=llm_result.confidence,
                         spoken_prompt=prompt,
-                        clarification_reason="amount_mismatch"
+                        clarification_reason="amount_mismatch",
                     )
 
             # Parameters are verified with zero guessing
             verified_params = {
                 "recipient": recipient,
                 "amount_raw": amount_raw,
-                "amount_kobo": amount_kobo
+                "amount_kobo": amount_kobo,
             }
             # Spoken prompt strictly generated from template (never from LLM)
             spoken_text = build_transfer_confirmation_prompt(amount_kobo, recipient)
@@ -187,7 +209,7 @@ class InterpreterService:
                 intent=tool_name,
                 params=verified_params,
                 confidence=llm_result.confidence,
-                spoken_prompt=spoken_text
+                spoken_prompt=spoken_text,
             )
 
         # 5. Handle get_balance
@@ -197,7 +219,7 @@ class InterpreterService:
                 intent=tool_name,
                 params={},
                 confidence=llm_result.confidence,
-                spoken_prompt="Checking your account balance."
+                spoken_prompt="Checking your account balance.",
             )
 
         # 6. Other generic manifest actions
@@ -207,5 +229,5 @@ class InterpreterService:
                 intent=tool_name,
                 params=tool_args,
                 confidence=llm_result.confidence,
-                spoken_prompt=f"Performing {tool_name.replace('_', ' ')}."
+                spoken_prompt=f"Performing {tool_name.replace('_', ' ')}.",
             )

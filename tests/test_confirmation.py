@@ -1,8 +1,9 @@
 import pytest
-import time
-from app.services.confirmation import is_strict_confirmation, ConfirmationService
-from app.crypto.jws_signer import signer, hash_params
+
+from app.crypto.jws_signer import hash_params, signer
 from app.db.database import init_db
+from app.services.confirmation import ConfirmationService, is_strict_confirmation
+
 
 @pytest.mark.asyncio
 async def test_strict_confirmation_phrases():
@@ -27,6 +28,7 @@ async def test_strict_confirmation_phrases():
     assert is_strict_confirmation("") is False
     assert is_strict_confirmation("   ") is False
 
+
 @pytest.mark.asyncio
 async def test_jws_minting_and_verification():
     await init_db()
@@ -35,12 +37,12 @@ async def test_jws_minting_and_verification():
     params = {"recipient": "David", "amount_kobo": 500_000, "amount_raw": "5k"}
     nonce = "nonce-abc-456"
 
-    token_str, payload = signer.sign_token(
+    token_str, _payload = signer.sign_token(
         session_id=session_id,
         action=action,
         params=params,
         nonce=nonce,
-        ttl_seconds=60
+        ttl_seconds=60,
     )
 
     assert isinstance(token_str, str)
@@ -54,6 +56,7 @@ async def test_jws_minting_and_verification():
     assert verified_payload["params_hash"] == hash_params(params)
     assert verified_payload["params"]["amount_kobo"] == 500_000
 
+
 @pytest.mark.asyncio
 async def test_confirmation_lifecycle():
     await init_db()
@@ -65,28 +68,35 @@ async def test_confirmation_lifecycle():
     pending = await ConfirmationService.create_pending(
         session_id=session_id,
         action=action,
-        params=params
+        params=params,
     )
     conf_id = pending["confirmation_id"]
     assert pending["status"] == "pending"
 
     # 2. Reject informal words like 'yes'
-    success, res, status_code = await ConfirmationService.process_confirm(conf_id, "yes")
+    success, res, status_code = await ConfirmationService.process_confirm(
+        conf_id, "yes"
+    )
     assert success is False
     assert status_code == 400
     assert res["status"] == "rejected"
 
     # 3. Confirm with strict phrase
-    success, res, status_code = await ConfirmationService.process_confirm(conf_id, "confirm")
+    success, res, status_code = await ConfirmationService.process_confirm(
+        conf_id, "confirm"
+    )
     assert success is True
     assert status_code == 200
     assert res["status"] == "confirmed"
     assert "token" in res
 
     # 4. Token cannot be confirmed again
-    success2, res2, status_code2 = await ConfirmationService.process_confirm(conf_id, "confirm")
+    success2, _res2, status_code2 = await ConfirmationService.process_confirm(
+        conf_id, "confirm"
+    )
     assert success2 is False
     assert status_code2 == 400
+
 
 @pytest.mark.asyncio
 async def test_confirmation_cancel():
@@ -98,7 +108,7 @@ async def test_confirmation_cancel():
     pending = await ConfirmationService.create_pending(
         session_id=session_id,
         action=action,
-        params=params
+        params=params,
     )
     conf_id = pending["confirmation_id"]
 

@@ -1,18 +1,19 @@
 import re
 import time
-from typing import Dict, Any, Tuple
-from app.crypto.jws_signer import signer, hash_params
+from typing import Any
+
+from app.config import settings
+from app.crypto.jws_signer import hash_params, signer
 from app.db.database import (
+    create_pending_confirmation,
     get_confirmation,
     update_confirmation_status,
-    create_pending_confirmation
 )
 from app.templates.speech import (
-    build_transfer_confirmation_prompt,
+    build_cancelled_prompt,
     build_confirmed_prompt,
-    build_cancelled_prompt
+    build_transfer_confirmation_prompt,
 )
-from app.config import settings
 
 STRICT_CONFIRMATION_PHRASES = {
     "confirm",
@@ -20,8 +21,9 @@ STRICT_CONFIRMATION_PHRASES = {
     "confirm transfer",
     "confirm payment",
     "confirm transaction",
-    "confirm send"
+    "confirm send",
 }
+
 
 def is_strict_confirmation(utterance: str) -> bool:
     """
@@ -35,19 +37,24 @@ def is_strict_confirmation(utterance: str) -> bool:
     cleaned = re.sub(r"[^\w\s]", "", utterance).strip().lower()
     return cleaned in STRICT_CONFIRMATION_PHRASES
 
+
 class ConfirmationService:
     @staticmethod
     async def create_pending(
-        session_id: str,
-        action: str,
-        params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        session_id: str, action: str, params: dict[str, Any]
+    ) -> dict[str, Any]:
         """Creates a pending confirmation record in SQLite."""
         p_hash = hash_params(params)
-        
+
         # Build deterministic spoken prompt for the pending confirmation
-        if action == "transfer_money" and "amount_kobo" in params and "recipient" in params:
-            spoken = build_transfer_confirmation_prompt(params["amount_kobo"], params["recipient"])
+        if (
+            action == "transfer_money"
+            and "amount_kobo" in params
+            and "recipient" in params
+        ):
+            spoken = build_transfer_confirmation_prompt(
+                params["amount_kobo"], params["recipient"]
+            )
         else:
             spoken = f"Please confirm {action.replace('_', ' ')}."
 
@@ -57,15 +64,14 @@ class ConfirmationService:
             params=params,
             params_hash=p_hash,
             spoken_prompt=spoken,
-            ttl_seconds=settings.CONFIRMATION_TOKEN_TTL_SECONDS
+            ttl_seconds=settings.CONFIRMATION_TOKEN_TTL_SECONDS,
         )
         return record
 
     @staticmethod
     async def process_confirm(
-        confirmation_id: str,
-        utterance: str
-    ) -> Tuple[bool, Dict[str, Any], int]:
+        confirmation_id: str, utterance: str
+    ) -> tuple[bool, dict[str, Any], int]:
         """
         Processes confirmation utterance strictly without LLM.
         Returns: (success, result_dict, http_status_code)
@@ -78,25 +84,37 @@ class ConfirmationService:
         now = int(time.time())
         if now > record["expires_at"]:
             await update_confirmation_status(confirmation_id, "expired")
-            return False, {
-                "status": "expired",
-                "error": "Confirmation has expired. Please initiate the request again.",
-                "spoken_prompt": "This request has expired. Please start again."
-            }, 400
+            return (
+                False,
+                {
+                    "status": "expired",
+                    "error": "Confirmation has expired. Please initiate the request again.",
+                    "spoken_prompt": "This request has expired. Please start again.",
+                },
+                400,
+            )
 
         if record["status"] != "pending":
-            return False, {
-                "status": record["status"],
-                "error": f"Confirmation is already {record['status']}"
-            }, 400
+            return (
+                False,
+                {
+                    "status": record["status"],
+                    "error": f"Confirmation is already {record['status']}",
+                },
+                400,
+            )
 
         # 2. Strict phrase check (NO LLM)
         if not is_strict_confirmation(utterance):
-            return False, {
-                "status": "rejected",
-                "error": "Confirmation phrase rejected. You must say 'confirm' to execute.",
-                "spoken_prompt": "Please say 'confirm' to proceed, or 'cancel' to abort."
-            }, 400
+            return (
+                False,
+                {
+                    "status": "rejected",
+                    "error": "Confirmation phrase rejected. You must say 'confirm' to execute.",
+                    "spoken_prompt": "Please say 'confirm' to proceed, or 'cancel' to abort.",
+                },
+                400,
+            )
 
         # 3. Mint short-lived signed JWS token bound to action, params hash, session_id, and single-use nonce
         token, payload = signer.sign_token(
@@ -105,7 +123,7 @@ class ConfirmationService:
             params=record["params"],
             nonce=record["nonce"],
             ttl_seconds=settings.CONFIRMATION_TOKEN_TTL_SECONDS,
-            now_ts=now
+            now_ts=now,
         )
 
         # 4. Update status in database
@@ -116,35 +134,46 @@ class ConfirmationService:
         recipient = record["params"].get("recipient", "")
         spoken = build_confirmed_prompt(amount_kobo, recipient)
 
-        return True, {
-            "status": "confirmed",
-            "confirmation_id": confirmation_id,
-            "token": token,
-            "expires_at": payload["exp"],
-            "spoken_prompt": spoken
-        }, 200
+        return (
+            True,
+            {
+                "status": "confirmed",
+                "confirmation_id": confirmation_id,
+                "token": token,
+                "expires_at": payload["exp"],
+                "spoken_prompt": spoken,
+            },
+            200,
+        )
 
     @staticmethod
     async def process_cancel(
-        confirmation_id: str,
-        reason: str = "user_cancelled"
-    ) -> Tuple[bool, Dict[str, Any], int]:
+        confirmation_id: str, reason: str = "user_cancelled"
+    ) -> tuple[bool, dict[str, Any], int]:
         """Marks pending confirmation as cancelled."""
         record = await get_confirmation(confirmation_id)
         if not record:
             return False, {"error": "Confirmation not found"}, 404
 
         if record["status"] != "pending":
-            return False, {
-                "status": record["status"],
-                "error": f"Confirmation is already {record['status']}"
-            }, 400
+            return (
+                False,
+                {
+                    "status": record["status"],
+                    "error": f"Confirmation is already {record['status']}",
+                },
+                400,
+            )
 
         await update_confirmation_status(confirmation_id, "cancelled")
         spoken = build_cancelled_prompt()
 
-        return True, {
-            "status": "cancelled",
-            "confirmation_id": confirmation_id,
-            "spoken_prompt": spoken
-        }, 200
+        return (
+            True,
+            {
+                "status": "cancelled",
+                "confirmation_id": confirmation_id,
+                "spoken_prompt": spoken,
+            },
+            200,
+        )

@@ -1,6 +1,8 @@
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from groq import AsyncGroq
+
 from app.config import settings
 from app.providers.base import BaseLLMProvider, LLMInterpretationResult, ToolCall
 
@@ -19,8 +21,9 @@ CRITICAL RULES:
 4. If the request does not clearly match any available tool or is completely outside the banking app scope, do not call any tool.
 """
 
+
 class GroqProvider(BaseLLMProvider):
-    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
+    def __init__(self, api_key: str | None = None, model: str | None = None):
         self.api_key = api_key or settings.GROQ_API_KEY
         self.model = model or settings.GROQ_MODEL
         self.client = AsyncGroq(api_key=self.api_key) if self.api_key else None
@@ -28,9 +31,9 @@ class GroqProvider(BaseLLMProvider):
     async def interpret(
         self,
         utterance: str,
-        manifest: List[Dict[str, Any]],
-        screen_descriptor: Optional[str] = None,
-        dialog_state: Optional[Dict[str, Any]] = None
+        manifest: list[dict[str, Any]],
+        screen_descriptor: str | None = None,
+        dialog_state: dict[str, Any] | None = None,
     ) -> LLMInterpretationResult:
         if not self.client:
             raise ValueError("Groq API key not configured")
@@ -38,36 +41,35 @@ class GroqProvider(BaseLLMProvider):
         # Convert manifest to OpenAI / Groq tool schema
         tools = []
         for action in manifest:
-            tools.append({
-                "type": "function",
-                "function": {
-                    "name": action["name"],
-                    "description": action.get("description", ""),
-                    "parameters": action.get("parameters", {"type": "object", "properties": {}})
+            tools.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": action["name"],
+                        "description": action.get("description", ""),
+                        "parameters": action.get(
+                            "parameters", {"type": "object", "properties": {}}
+                        ),
+                    },
                 }
-            })
+            )
 
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT}
-        ]
-        
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+
         user_context_parts = [f"Utterance: {utterance}"]
         if screen_descriptor:
             user_context_parts.append(f"Current Screen: {screen_descriptor}")
         if dialog_state:
             user_context_parts.append(f"Dialog Context: {json.dumps(dialog_state)}")
-            
-        messages.append({
-            "role": "user",
-            "content": "\n".join(user_context_parts)
-        })
+
+        messages.append({"role": "user", "content": "\n".join(user_context_parts)})
 
         response = await self.client.chat.completions.create(
             model=self.model,
             messages=messages,
-            tools=tools if tools else None,
+            tools=tools or None,
             tool_choice="auto",
-            temperature=0.0
+            temperature=0.0,
         )
 
         choice = response.choices[0]
@@ -76,7 +78,7 @@ class GroqProvider(BaseLLMProvider):
             for tc in choice.message.tool_calls:
                 try:
                     args = json.loads(tc.function.arguments)
-                except Exception:
+                except (json.JSONDecodeError, TypeError, KeyError):
                     args = {}
                 tool_calls_out.append(ToolCall(name=tc.function.name, arguments=args))
 
@@ -87,5 +89,5 @@ class GroqProvider(BaseLLMProvider):
             tool_calls=tool_calls_out,
             confidence=confidence,
             text_content=choice.message.content,
-            raw_response=response
+            raw_response=response,
         )

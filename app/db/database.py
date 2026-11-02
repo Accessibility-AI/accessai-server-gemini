@@ -1,9 +1,12 @@
 import json
 import time
 import uuid
+from typing import Any
+
 import aiosqlite
-from typing import Any, Dict, Optional
+
 from app.config import settings
+
 
 async def init_db():
     """Initializes SQLite database and tables."""
@@ -35,14 +38,17 @@ async def init_db():
         """)
         await db.commit()
 
-async def create_session(session_id: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+
+async def create_session(
+    session_id: str | None = None, metadata: dict[str, Any] | None = None
+) -> dict[str, Any]:
     sid = session_id or str(uuid.uuid4())
     now = int(time.time())
     meta_str = json.dumps(metadata or {})
     async with aiosqlite.connect(settings.DATABASE_PATH) as db:
         await db.execute(
             "INSERT INTO sessions (session_id, status, metadata_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-            (sid, "active", meta_str, now, now)
+            (sid, "active", meta_str, now, now),
         )
         await db.commit()
     return {
@@ -50,13 +56,16 @@ async def create_session(session_id: Optional[str] = None, metadata: Optional[Di
         "status": "active",
         "metadata": metadata or {},
         "created_at": now,
-        "updated_at": now
+        "updated_at": now,
     }
 
-async def get_session(session_id: str) -> Optional[Dict[str, Any]]:
+
+async def get_session(session_id: str) -> dict[str, Any] | None:
     async with aiosqlite.connect(settings.DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
-        async with db.execute("SELECT * FROM sessions WHERE session_id = ?", (session_id,)) as cursor:
+        async with db.execute(
+            "SELECT * FROM sessions WHERE session_id = ?", (session_id,)
+        ) as cursor:
             row = await cursor.fetchone()
             if not row:
                 return None
@@ -65,23 +74,24 @@ async def get_session(session_id: str) -> Optional[Dict[str, Any]]:
                 "status": row["status"],
                 "metadata": json.loads(row["metadata_json"] or "{}"),
                 "created_at": row["created_at"],
-                "updated_at": row["updated_at"]
+                "updated_at": row["updated_at"],
             }
+
 
 async def create_pending_confirmation(
     session_id: str,
     action: str,
-    params: Dict[str, Any],
+    params: dict[str, Any],
     params_hash: str,
     spoken_prompt: str,
-    ttl_seconds: int = 60
-) -> Dict[str, Any]:
+    ttl_seconds: int = 60,
+) -> dict[str, Any]:
     conf_id = str(uuid.uuid4())
     nonce = uuid.uuid4().hex
     now = int(time.time())
     expires_at = now + ttl_seconds
     params_str = json.dumps(params)
-    
+
     async with aiosqlite.connect(settings.DATABASE_PATH) as db:
         await db.execute(
             """
@@ -89,10 +99,22 @@ async def create_pending_confirmation(
                 id, session_id, action, params_json, params_hash, nonce, status, spoken_prompt, token, created_at, expires_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (conf_id, session_id, action, params_str, params_hash, nonce, "pending", spoken_prompt, None, now, expires_at)
+            (
+                conf_id,
+                session_id,
+                action,
+                params_str,
+                params_hash,
+                nonce,
+                "pending",
+                spoken_prompt,
+                None,
+                now,
+                expires_at,
+            ),
         )
         await db.commit()
-        
+
     return {
         "confirmation_id": conf_id,
         "session_id": session_id,
@@ -103,13 +125,16 @@ async def create_pending_confirmation(
         "status": "pending",
         "spoken_prompt": spoken_prompt,
         "created_at": now,
-        "expires_at": expires_at
+        "expires_at": expires_at,
     }
 
-async def get_confirmation(conf_id: str) -> Optional[Dict[str, Any]]:
+
+async def get_confirmation(conf_id: str) -> dict[str, Any] | None:
     async with aiosqlite.connect(settings.DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
-        async with db.execute("SELECT * FROM confirmations WHERE id = ?", (conf_id,)) as cursor:
+        async with db.execute(
+            "SELECT * FROM confirmations WHERE id = ?", (conf_id,)
+        ) as cursor:
             row = await cursor.fetchone()
             if not row:
                 return None
@@ -124,18 +149,17 @@ async def get_confirmation(conf_id: str) -> Optional[Dict[str, Any]]:
                 "spoken_prompt": row["spoken_prompt"],
                 "token": row["token"],
                 "created_at": row["created_at"],
-                "expires_at": row["expires_at"]
+                "expires_at": row["expires_at"],
             }
 
+
 async def update_confirmation_status(
-    conf_id: str,
-    status: str,
-    token: Optional[str] = None
+    conf_id: str, status: str, token: str | None = None
 ) -> bool:
     async with aiosqlite.connect(settings.DATABASE_PATH) as db:
         result = await db.execute(
             "UPDATE confirmations SET status = ?, token = coalesce(?, token) WHERE id = ?",
-            (status, token, conf_id)
+            (status, token, conf_id),
         )
         await db.commit()
         return result.rowcount > 0

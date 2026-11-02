@@ -1,13 +1,14 @@
 import pytest
-from httpx import AsyncClient, ASGITransport
-from app.main import app
+from httpx import ASGITransport, AsyncClient
+
 from app.db.database import init_db
+from app.main import app
 
 MANIFEST = [
     {
         "name": "get_balance",
         "description": "Check current account balance",
-        "parameters": {"type": "object", "properties": {}}
+        "parameters": {"type": "object", "properties": {}},
     },
     {
         "name": "transfer_money",
@@ -17,12 +18,13 @@ MANIFEST = [
             "properties": {
                 "amount_raw": {"type": "string"},
                 "amount_numeric_estimate": {"type": "number"},
-                "recipient": {"type": "string"}
+                "recipient": {"type": "string"},
             },
-            "required": ["amount_raw", "recipient"]
-        }
-    }
+            "required": ["amount_raw", "recipient"],
+        },
+    },
 ]
+
 
 @pytest.mark.asyncio
 async def test_full_api_workflow():
@@ -45,19 +47,24 @@ async def test_full_api_workflow():
         assert jwks["keys"][0]["alg"] == "EdDSA"
 
         # 3. POST /v1/sessions
-        res = await client.post("/v1/sessions", json={"metadata": {"user": "test_blind_user"}})
+        res = await client.post(
+            "/v1/sessions", json={"metadata": {"user": "test_blind_user"}}
+        )
         assert res.status_code == 201
         session_data = res.json()
         session_id = session_data["session_id"]
         assert session_id is not None
 
         # 4. POST /v1/interpret (Valid transfer request in Nigerian English)
-        res = await client.post("/v1/interpret", json={
-            "session_id": session_id,
-            "utterance": "abeg send 5k give David",
-            "manifest": MANIFEST,
-            "screen_descriptor": "Home Screen"
-        })
+        res = await client.post(
+            "/v1/interpret",
+            json={
+                "session_id": session_id,
+                "utterance": "abeg send 5k give David",
+                "manifest": MANIFEST,
+                "screen_descriptor": "Home Screen",
+            },
+        )
         assert res.status_code == 200
         interp = res.json()
         assert interp["type"] == "action"
@@ -66,27 +73,30 @@ async def test_full_api_workflow():
         assert interp["params"]["recipient"] == "David"
 
         # 5. POST /v1/confirmations/pending
-        res = await client.post("/v1/confirmations/pending", json={
-            "session_id": session_id,
-            "action": interp["intent"],
-            "params": interp["params"]
-        })
+        res = await client.post(
+            "/v1/confirmations/pending",
+            json={
+                "session_id": session_id,
+                "action": interp["intent"],
+                "params": interp["params"],
+            },
+        )
         assert res.status_code == 201
         pending = res.json()
         conf_id = pending["confirmation_id"]
         assert pending["status"] == "pending"
 
         # 6. POST /v1/confirmations/{id}/confirm with informal "yes" -> MUST BE REJECTED
-        res = await client.post(f"/v1/confirmations/{conf_id}/confirm", json={
-            "utterance": "yes"
-        })
+        res = await client.post(
+            f"/v1/confirmations/{conf_id}/confirm", json={"utterance": "yes"}
+        )
         assert res.status_code == 400
         assert res.json()["detail"]["status"] == "rejected"
 
         # 7. POST /v1/confirmations/{id}/confirm with strict "confirm" -> SUCCESS
-        res = await client.post(f"/v1/confirmations/{conf_id}/confirm", json={
-            "utterance": "confirm"
-        })
+        res = await client.post(
+            f"/v1/confirmations/{conf_id}/confirm", json={"utterance": "confirm"}
+        )
         assert res.status_code == 200
         confirmed = res.json()
         assert confirmed["status"] == "confirmed"

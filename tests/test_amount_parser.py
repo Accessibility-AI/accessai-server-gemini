@@ -1,9 +1,9 @@
-import pytest
 from app.parsers.amount_parser import (
     parse_amount_to_kobo,
     verify_amount_agreement,
-    words_to_number
+    words_to_number,
 )
+
 
 def test_words_to_number():
     assert words_to_number("five") == 5
@@ -15,6 +15,7 @@ def test_words_to_number():
     assert words_to_number("twenty thousand five hundred") == 20500
     assert words_to_number("half a million") == 500000
 
+
 def test_parse_shorthand_amounts():
     # 1 Naira = 100 Kobo
     assert parse_amount_to_kobo("5k") == 500_000
@@ -25,6 +26,7 @@ def test_parse_shorthand_amounts():
     assert parse_amount_to_kobo("1m") == 100_000_000
     assert parse_amount_to_kobo("2m naira") == 200_000_000
 
+
 def test_parse_currency_symbols():
     assert parse_amount_to_kobo("N5000") == 500_000
     assert parse_amount_to_kobo("₦5000") == 500_000
@@ -33,6 +35,7 @@ def test_parse_currency_symbols():
     assert parse_amount_to_kobo("NGN 5,000.50") == 500_050
     assert parse_amount_to_kobo("5000 naira") == 500_000
 
+
 def test_parse_word_amounts():
     assert parse_amount_to_kobo("five thousand naira") == 500_000
     assert parse_amount_to_kobo("twenty thousand naira") == 2_000_000
@@ -40,17 +43,20 @@ def test_parse_word_amounts():
     assert parse_amount_to_kobo("fifty naira") == 5_000
     assert parse_amount_to_kobo("one hundred naira") == 10_000
 
+
 def test_parse_kobo_and_compound():
     assert parse_amount_to_kobo("50 kobo") == 50
     assert parse_amount_to_kobo("fifty kobo") == 50
     assert parse_amount_to_kobo("500 naira 50 kobo") == 50_050
     assert parse_amount_to_kobo("five hundred naira and fifty kobo") == 50_050
 
+
 def test_parse_invalid_amounts():
     assert parse_amount_to_kobo("") is None
     assert parse_amount_to_kobo("some money") is None
     assert parse_amount_to_kobo("naira") is None
     assert parse_amount_to_kobo("david") is None
+
 
 def test_amount_agreement_verification():
     # 500,000 kobo = 5,000 Naira
