@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     # LLM Provider configuration
     LLM_PROVIDER: Literal["groq", "anthropic", "mock"] = "mock"
     GROQ_API_KEY: str = ""
-    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    GROQ_MODEL: str = "openai/gpt-oss-120b"
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = "claude-3-5-haiku-20241022"
 
