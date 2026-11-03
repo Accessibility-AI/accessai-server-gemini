@@ -1,5 +1,6 @@
 import re
 import time
+import unicodedata
 from typing import Any
 
 from app.config import settings
@@ -9,39 +10,91 @@ from app.db.database import (
     get_confirmation,
     update_confirmation_status,
 )
+from app.parsers.language import detect_language
 from app.templates.speech import (
     build_cancelled_prompt,
     build_confirmed_prompt,
     build_transfer_confirmation_prompt,
 )
 
+# Multilingual strict confirmation phrases across 8 languages/dialects
 STRICT_CONFIRMATION_PHRASES = {
+    # English & Broken English / Pidgin
     "confirm",
     "i confirm",
     "confirm transfer",
     "confirm payment",
     "confirm transaction",
     "confirm send",
+    # Yoruba
+    "jẹ́rìí",
+    "jerii",
+    "jeri",
+    "mo jẹ́rìí",
+    "mo jerii",
+    "mo jeri",
+    "mo fọwọsi",
+    "mo fowosi",
+    "fọwọsi",
+    "fowosi",
+    # Igbo
+    "kwado",
+    "akwadom",
+    "akwadola",
+    "kwado mbufe",
+    # Hausa
+    "tabbatar",
+    "na tabbatar",
+    "tabbatar da turawa",
+    # French
+    "confirmer",
+    "je confirme",
+    "confirmer le transfert",
+    # German
+    "bestätigen",
+    "bestatigen",
+    "ich bestätige",
+    "ich bestatige",
+    # Spanish
+    "confirmar",
+    "confirmo",
+    "confirmar transferencia",
 }
 
 
 def is_strict_confirmation(utterance: str) -> bool:
-    """
-    Checks user confirmation utterance against strict phrase list.
+    """Checks user confirmation utterance against strict phrase list across all supported languages.
+
     NO LLM IS INVOLVED.
-    Words like 'yes', 'okay', 'proceed', or silence return False.
+    Words like 'yes', 'oui', 'ja', 'sí', 'okay', 'proceed', or silence return False.
     """
     if not utterance or not isinstance(utterance, str):
         return False
-    # Clean whitespace and strip trailing punctuation
-    cleaned = re.sub(r"[^\w\s]", "", utterance).strip().lower()
-    return cleaned in STRICT_CONFIRMATION_PHRASES
+
+    nfc = unicodedata.normalize("NFC", utterance).strip().lower()
+    cleaned_nfc = re.sub(r"[^\w\s]", "", nfc).strip()
+
+    # ASCII stripped version as fallback
+    ascii_clean = (
+        unicodedata.normalize("NFKD", cleaned_nfc)
+        .encode("ASCII", "ignore")
+        .decode("utf-8")
+        .strip()
+    )
+
+    return (
+        cleaned_nfc in STRICT_CONFIRMATION_PHRASES
+        or ascii_clean in STRICT_CONFIRMATION_PHRASES
+    )
 
 
 class ConfirmationService:
     @staticmethod
     async def create_pending(
-        session_id: str, action: str, params: dict[str, Any]
+        session_id: str,
+        action: str,
+        params: dict[str, Any],
+        lang: str = "en",
     ) -> dict[str, Any]:
         """Creates a pending confirmation record in SQLite."""
         p_hash = hash_params(params)
@@ -53,7 +106,7 @@ class ConfirmationService:
             and "recipient" in params
         ):
             spoken = build_transfer_confirmation_prompt(
-                params["amount_kobo"], params["recipient"]
+                params["amount_kobo"], params["recipient"], lang=lang
             )
         else:
             spoken = f"Please confirm {action.replace('_', ' ')}."
@@ -70,10 +123,11 @@ class ConfirmationService:
 
     @staticmethod
     async def process_confirm(
-        confirmation_id: str, utterance: str
+        confirmation_id: str,
+        utterance: str,
     ) -> tuple[bool, dict[str, Any], int]:
-        """
-        Processes confirmation utterance strictly without LLM.
+        """Processes confirmation utterance strictly without LLM.
+
         Returns: (success, result_dict, http_status_code)
         """
         # 1. Fetch confirmation from DB
@@ -104,7 +158,7 @@ class ConfirmationService:
                 400,
             )
 
-        # 2. Strict phrase check (NO LLM)
+        # 2. Strict phrase check across supported languages (NO LLM)
         if not is_strict_confirmation(utterance):
             return (
                 False,
@@ -129,10 +183,11 @@ class ConfirmationService:
         # 4. Update status in database
         await update_confirmation_status(confirmation_id, "confirmed", token=token)
 
-        # 5. Spoken response
+        # 5. Spoken response in detected language
+        lang = detect_language(utterance)
         amount_kobo = record["params"].get("amount_kobo", 0)
         recipient = record["params"].get("recipient", "")
-        spoken = build_confirmed_prompt(amount_kobo, recipient)
+        spoken = build_confirmed_prompt(amount_kobo, recipient, lang=lang)
 
         return (
             True,
@@ -148,7 +203,9 @@ class ConfirmationService:
 
     @staticmethod
     async def process_cancel(
-        confirmation_id: str, reason: str = "user_cancelled"
+        confirmation_id: str,
+        reason: str = "user_cancelled",
+        utterance: str = "",
     ) -> tuple[bool, dict[str, Any], int]:
         """Marks pending confirmation as cancelled."""
         record = await get_confirmation(confirmation_id)
@@ -166,7 +223,8 @@ class ConfirmationService:
             )
 
         await update_confirmation_status(confirmation_id, "cancelled")
-        spoken = build_cancelled_prompt()
+        lang = detect_language(utterance) if utterance else "en"
+        spoken = build_cancelled_prompt(lang=lang)
 
         return (
             True,

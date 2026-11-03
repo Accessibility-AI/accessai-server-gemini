@@ -41,7 +41,8 @@ async def test_pidgin_transfer_intent(service):
     assert res.intent == "transfer_money"
     assert res.params["recipient"] == "David"
     assert res.params["amount_kobo"] == 500_000
-    assert "Transfer 5,000 Naira to David" in res.spoken_prompt
+    assert "5,000 Naira" in res.spoken_prompt
+    assert "David" in res.spoken_prompt
 
 
 @pytest.mark.asyncio

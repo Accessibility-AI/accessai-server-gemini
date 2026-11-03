@@ -452,6 +452,11 @@
               }
             ],
             "title": "Clarification Reason"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "default": "en"
           }
         },
         "type": "object",
