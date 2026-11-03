@@ -16,10 +16,24 @@ async def init_db():
                 session_id TEXT PRIMARY KEY,
                 status TEXT NOT NULL,
                 metadata_json TEXT,
+                device_key_json TEXT,
+                app_id TEXT,
+                locale TEXT,
                 created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL
             );
         """)
+        # Safe migration for existing SQLite databases
+        cursor = await db.execute("PRAGMA table_info(sessions);")
+        existing_cols = {row[1] for row in await cursor.fetchall()}
+        for col, col_type in [
+            ("device_key_json", "TEXT"),
+            ("app_id", "TEXT"),
+            ("locale", "TEXT"),
+        ]:
+            if col not in existing_cols:
+                await db.execute(f"ALTER TABLE sessions ADD COLUMN {col} {col_type};")
+
         await db.execute("""
             CREATE TABLE IF NOT EXISTS confirmations (
                 id TEXT PRIMARY KEY,
@@ -40,20 +54,36 @@ async def init_db():
 
 
 async def create_session(
-    session_id: str | None = None, metadata: dict[str, Any] | None = None
+    session_id: str | None = None,
+    metadata: dict[str, Any] | None = None,
+    device_key: dict[str, Any] | Any | None = None,
+    app_id: str | None = None,
+    locale: str | None = None,
 ) -> dict[str, Any]:
     sid = session_id or str(uuid.uuid4())
     now = int(time.time())
     meta_str = json.dumps(metadata or {})
+    dk_dict = (
+        device_key.model_dump() if hasattr(device_key, "model_dump") else device_key
+    )
+    dk_str = json.dumps(dk_dict) if dk_dict else None
+
     async with aiosqlite.connect(settings.DATABASE_PATH) as db:
         await db.execute(
-            "INSERT INTO sessions (session_id, status, metadata_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-            (sid, "active", meta_str, now, now),
+            """
+            INSERT INTO sessions (
+                session_id, status, metadata_json, device_key_json, app_id, locale, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (sid, "active", meta_str, dk_str, app_id, locale, now, now),
         )
         await db.commit()
     return {
         "session_id": sid,
         "status": "active",
+        "app_id": app_id,
+        "locale": locale,
+        "device_key": dk_dict,
         "metadata": metadata or {},
         "created_at": now,
         "updated_at": now,
@@ -69,9 +99,16 @@ async def get_session(session_id: str) -> dict[str, Any] | None:
             row = await cursor.fetchone()
             if not row:
                 return None
+            row_keys = set(row.keys())
+            dk_json = row["device_key_json"] if "device_key_json" in row_keys else None
+            app_id = row["app_id"] if "app_id" in row_keys else None
+            locale = row["locale"] if "locale" in row_keys else None
             return {
                 "session_id": row["session_id"],
                 "status": row["status"],
+                "app_id": app_id,
+                "locale": locale,
+                "device_key": json.loads(dk_json) if dk_json else None,
                 "metadata": json.loads(row["metadata_json"] or "{}"),
                 "created_at": row["created_at"],
                 "updated_at": row["updated_at"],

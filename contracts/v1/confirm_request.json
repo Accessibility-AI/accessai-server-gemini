@@ -1,13 +1,111 @@
 {
-  "properties": {
-    "utterance": {
-      "title": "Utterance",
-      "type": "string"
+  "$defs": {
+    "DeviceAuth": {
+      "properties": {
+        "method": {
+          "default": "biometric",
+          "description": "Device unlock method: 'biometric' or 'device_credential'",
+          "title": "Method",
+          "type": "string"
+        },
+        "kid": {
+          "description": "Key ID matching session device_key.kid",
+          "title": "Kid",
+          "type": "string"
+        },
+        "alg": {
+          "default": "ES256",
+          "description": "Signature algorithm (ES256)",
+          "title": "Alg",
+          "type": "string"
+        },
+        "signature": {
+          "description": "Base64 DER ECDSA signature over accessai-auth-v1|{session_id}|{pending_id}|{action_id}|{params_sha256}",
+          "title": "Signature",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kid",
+        "signature"
+      ],
+      "title": "DeviceAuth",
+      "type": "object"
     }
   },
-  "required": [
-    "utterance"
-  ],
+  "properties": {
+    "session_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Session Id"
+    },
+    "pending_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pending Id"
+    },
+    "confirmation_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Confirmation Id"
+    },
+    "method": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": "voice",
+      "title": "Method"
+    },
+    "utterance": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Utterance"
+    },
+    "auth": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DeviceAuth"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
   "title": "ConfirmRequest",
   "type": "object"
 }

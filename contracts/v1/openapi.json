@@ -169,6 +169,82 @@
         }
       }
     },
+    "/v1/confirmations/confirm": {
+      "post": {
+        "summary": "Confirm Action Direct",
+        "operationId": "confirm_action_direct_v1_confirmations_confirm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfirmResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/confirm": {
+      "post": {
+        "summary": "Confirm Action Direct",
+        "operationId": "confirm_action_direct_v1_confirm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfirmResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/confirmations/{id}/cancel": {
       "post": {
         "summary": "Cancel Action",
@@ -297,15 +373,74 @@
       },
       "ConfirmRequest": {
         "properties": {
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "pending_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending Id"
+          },
+          "confirmation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmation Id"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method",
+            "default": "voice"
+          },
           "utterance": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Utterance"
+          },
+          "auth": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DeviceAuth"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
-        "required": [
-          "utterance"
-        ],
         "title": "ConfirmRequest"
       },
       "ConfirmResponse": {
@@ -340,6 +475,77 @@
           "spoken_prompt"
         ],
         "title": "ConfirmResponse"
+      },
+      "DeviceAuth": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "title": "Method",
+            "description": "Device unlock method: 'biometric' or 'device_credential'",
+            "default": "biometric"
+          },
+          "kid": {
+            "type": "string",
+            "title": "Kid",
+            "description": "Key ID matching session device_key.kid"
+          },
+          "alg": {
+            "type": "string",
+            "title": "Alg",
+            "description": "Signature algorithm (ES256)",
+            "default": "ES256"
+          },
+          "signature": {
+            "type": "string",
+            "title": "Signature",
+            "description": "Base64 DER ECDSA signature over accessai-auth-v1|{session_id}|{pending_id}|{action_id}|{params_sha256}"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kid",
+          "signature"
+        ],
+        "title": "DeviceAuth"
+      },
+      "DeviceKey": {
+        "properties": {
+          "kid": {
+            "type": "string",
+            "title": "Kid"
+          },
+          "alg": {
+            "type": "string",
+            "title": "Alg",
+            "default": "ES256"
+          },
+          "public_key": {
+            "type": "string",
+            "title": "Public Key",
+            "description": "Base64 X.509 SubjectPublicKeyInfo DER encoded ECDSA public key"
+          },
+          "attestation_chain": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attestation Chain",
+            "description": "Optional list of base64 DER X.509 certificates proving hardware backing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kid",
+          "public_key"
+        ],
+        "title": "DeviceKey"
       },
       "HTTPValidationError": {
         "properties": {
@@ -383,6 +589,25 @@
               }
             ],
             "title": "Screen Descriptor"
+          },
+          "screen": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Screen"
           },
           "dialog_state": {
             "anyOf": [
@@ -457,6 +682,39 @@
             "type": "string",
             "title": "Language",
             "default": "en"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "processing_region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Processing Region"
+          },
+          "data_processing_notice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Processing Notice"
           }
         },
         "type": "object",
@@ -548,6 +806,38 @@
             ],
             "title": "Session Id"
           },
+          "app_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "App Id"
+          },
+          "locale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locale"
+          },
+          "device_key": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DeviceKey"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "metadata": {
             "anyOf": [
               {
@@ -574,6 +864,38 @@
             "type": "string",
             "title": "Status"
           },
+          "app_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "App Id"
+          },
+          "locale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locale"
+          },
+          "device_key": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DeviceKey"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "metadata": {
             "additionalProperties": true,
             "type": "object",
@@ -592,7 +914,6 @@
         "required": [
           "session_id",
           "status",
-          "metadata",
           "created_at",
           "updated_at"
         ],

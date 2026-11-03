@@ -16,10 +16,14 @@ class Settings(BaseSettings):
 
     # LLM Provider configuration
     LLM_PROVIDER: Literal["groq", "anthropic", "mock"] = "mock"
+    LLM_REGION: str = "US"  # Region of processing for NDPA 2023 disclosures
     GROQ_API_KEY: str = ""
     GROQ_MODEL: str = "openai/gpt-oss-120b"
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = "claude-3-5-haiku-20241022"
+
+    # Security & Device Auth (v1.1)
+    ENFORCE_DEVICE_AUTH: bool = False  # Enforce device key on all sensitive actions
 
     # Confidence threshold for intent routing
     CONFIDENCE_THRESHOLD: float = 0.85

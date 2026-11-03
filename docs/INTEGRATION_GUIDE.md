@@ -48,8 +48,9 @@ sequenceDiagram
     SDK-->>User: Speaks prompt via Android TTS
     
     User->>SDK: Speaks "confirm" (Strict phrase, "yes" rejected)
-    SDK->>AI: POST /v1/confirmations/{id}/confirm (utterance="confirm")
-    Note over AI: Strict phrase validation (No LLM).<br/>Mints Ed25519 JWS token bound to:<br/>• action ("transfer_money")<br/>• params_hash (SHA-256)<br/>• session_id & single-use nonce<br/>• exp (~60s TTL)
+    Note over SDK: Hardware check: Android Keystore key unlocked<br/>via Biometric (Fingerprint/Face) or Device Credential (PIN/Pattern).<br/>SDK signs: accessai-auth-v1|{session_id}|{pending_id}|{action_id}|{params_sha256}
+    SDK->>AI: POST /v1/confirmations/{id}/confirm (utterance="confirm", auth={method, kid, alg="ES256", signature})
+    Note over AI: 1. Strict phrase validation (No LLM).<br/>2. Verifies ES256 ECDSA signature against session.device_key.<br/>3. Rebuilds payload & matches params_sha256.<br/>4. Mints Ed25519 JWS token bound to:<br/>• action ("transfer_money")<br/>• params_hash (SHA-256)<br/>• session_id & single-use nonce<br/>• amr: ["biometric"] or ["device_credential"]<br/>• exp (~60s TTL)
     AI-->>SDK: Status: confirmed, token: "eyJhbGciOi..."
     
     SDK->>App: Executes developer callback with JWS token

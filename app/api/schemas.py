@@ -3,15 +3,34 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
+class DeviceKey(BaseModel):
+    kid: str
+    alg: str = "ES256"
+    public_key: str = Field(
+        ...,
+        description="Base64 X.509 SubjectPublicKeyInfo DER encoded ECDSA public key",
+    )
+    attestation_chain: list[str] | None = Field(
+        default=None,
+        description="Optional list of base64 DER X.509 certificates proving hardware backing",
+    )
+
+
 class SessionCreateRequest(BaseModel):
     session_id: str | None = None
+    app_id: str | None = None
+    locale: str | None = None
+    device_key: DeviceKey | None = None
     metadata: dict[str, Any] | None = None
 
 
 class SessionResponse(BaseModel):
     session_id: str
     status: str
-    metadata: dict[str, Any]
+    app_id: str | None = None
+    locale: str | None = None
+    device_key: DeviceKey | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: int
     updated_at: int
 
@@ -34,7 +53,21 @@ class InterpretRequest(BaseModel):
         ..., description="Allowed actions exposed by the host Android app"
     )
     screen_descriptor: str | None = None
+    screen: dict[str, Any] | list[Any] | str | None = None
     dialog_state: dict[str, Any] | None = None
+
+
+class InterpretResponse(BaseModel):
+    type: str  # "action" or "clarification"
+    intent: str | None = None
+    params: dict[str, Any] | None = None
+    confidence: float
+    spoken_prompt: str
+    clarification_reason: str | None = None
+    language: str = "en"
+    provider: str | None = None
+    processing_region: str | None = None
+    data_processing_notice: str | None = None
 
 
 class PendingConfirmationRequest(BaseModel):
@@ -53,8 +86,26 @@ class PendingConfirmationResponse(BaseModel):
     expires_at: int
 
 
+class DeviceAuth(BaseModel):
+    method: str = Field(
+        default="biometric",
+        description="Device unlock method: 'biometric' or 'device_credential'",
+    )
+    kid: str = Field(..., description="Key ID matching session device_key.kid")
+    alg: str = Field(default="ES256", description="Signature algorithm (ES256)")
+    signature: str = Field(
+        ...,
+        description="Base64 DER ECDSA signature over accessai-auth-v1|{session_id}|{pending_id}|{action_id}|{params_sha256}",
+    )
+
+
 class ConfirmRequest(BaseModel):
-    utterance: str
+    session_id: str | None = None
+    pending_id: str | None = None
+    confirmation_id: str | None = None
+    method: str | None = "voice"
+    utterance: str | None = None
+    auth: DeviceAuth | None = None
 
 
 class ConfirmResponse(BaseModel):

@@ -4,10 +4,12 @@ import unicodedata
 from typing import Any
 
 from app.config import settings
+from app.crypto.device_auth import verify_device_auth
 from app.crypto.jws_signer import hash_params, signer
 from app.db.database import (
     create_pending_confirmation,
     get_confirmation,
+    get_session,
     update_confirmation_status,
 )
 from app.parsers.language import detect_language
@@ -124,16 +126,25 @@ class ConfirmationService:
     @staticmethod
     async def process_confirm(
         confirmation_id: str,
-        utterance: str,
+        utterance: str | None = None,
+        auth: dict[str, Any] | None = None,
+        method: str | None = "voice",
     ) -> tuple[bool, dict[str, Any], int]:
-        """Processes confirmation utterance strictly without LLM.
+        """Processes confirmation strictly without LLM, verifying device authentication (v1.1).
 
         Returns: (success, result_dict, http_status_code)
         """
         # 1. Fetch confirmation from DB
         record = await get_confirmation(confirmation_id)
         if not record:
-            return False, {"error": "Confirmation not found"}, 404
+            return (
+                False,
+                {
+                    "error": {"code": "not_found", "message": "Confirmation not found"},
+                    "detail": "Confirmation not found",
+                },
+                404,
+            )
 
         now = int(time.time())
         if now > record["expires_at"]:
@@ -142,7 +153,11 @@ class ConfirmationService:
                 False,
                 {
                     "status": "expired",
-                    "error": "Confirmation has expired. Please initiate the request again.",
+                    "error": {
+                        "code": "expired",
+                        "message": "Confirmation has expired. Please initiate the request again.",
+                    },
+                    "detail": "Confirmation has expired",
                     "spoken_prompt": "This request has expired. Please start again.",
                 },
                 400,
@@ -153,24 +168,113 @@ class ConfirmationService:
                 False,
                 {
                     "status": record["status"],
-                    "error": f"Confirmation is already {record['status']}",
+                    "error": {
+                        "code": "invalid_status",
+                        "message": f"Confirmation is already {record['status']}",
+                    },
+                    "detail": f"Confirmation is already {record['status']}",
                 },
                 400,
             )
 
-        # 2. Strict phrase check across supported languages (NO LLM)
-        if not is_strict_confirmation(utterance):
+        # 2. Fetch session and perform device authentication verification
+        session = await get_session(record["session_id"])
+        device_key = session.get("device_key") if session else None
+
+        # If device_key is configured or auth is supplied or enforcement is enabled:
+        if device_key or auth or settings.ENFORCE_DEVICE_AUTH:
+            if not device_key:
+                return (
+                    False,
+                    {
+                        "error": {
+                            "code": "auth_invalid",
+                            "message": "Device key not registered for session",
+                        },
+                        "detail": {
+                            "code": "auth_invalid",
+                            "message": "Device key not registered for session",
+                        },
+                    },
+                    401,
+                )
+            if not auth:
+                return (
+                    False,
+                    {
+                        "error": {
+                            "code": "auth_invalid",
+                            "message": "Device authentication required for sensitive action",
+                        },
+                        "detail": {
+                            "code": "auth_invalid",
+                            "message": "Device authentication required for sensitive action",
+                        },
+                    },
+                    401,
+                )
+
+            # Rebuild signed payload and verify ES256 signature
+            is_valid, err_reason = verify_device_auth(
+                device_key=device_key,
+                auth=auth,
+                session_id=record["session_id"],
+                pending_id=confirmation_id,
+                action_id=record["action"],
+                params_sha256=record["params_hash"],
+            )
+            if not is_valid:
+                return (
+                    False,
+                    {
+                        "error": {
+                            "code": "auth_invalid",
+                            "message": f"Device auth verification failed: {err_reason}",
+                        },
+                        "detail": {
+                            "code": "auth_invalid",
+                            "message": f"Device auth verification failed: {err_reason}",
+                        },
+                    },
+                    401,
+                )
+
+        # 3. Strict phrase check across supported languages (NO LLM)
+        if utterance:
+            if not is_strict_confirmation(utterance):
+                return (
+                    False,
+                    {
+                        "status": "rejected",
+                        "error": {
+                            "code": "rejected",
+                            "message": "Confirmation phrase rejected. You must say 'confirm' to execute.",
+                        },
+                        "detail": {
+                            "status": "rejected",
+                            "message": "Confirmation phrase rejected",
+                        },
+                        "spoken_prompt": "Please say 'confirm' to proceed, or 'cancel' to abort.",
+                    },
+                    400,
+                )
+        elif method == "voice" and not auth:
             return (
                 False,
                 {
                     "status": "rejected",
-                    "error": "Confirmation phrase rejected. You must say 'confirm' to execute.",
+                    "error": {
+                        "code": "rejected",
+                        "message": "Utterance missing for voice confirmation.",
+                    },
+                    "detail": {"status": "rejected", "message": "Utterance missing"},
                     "spoken_prompt": "Please say 'confirm' to proceed, or 'cancel' to abort.",
                 },
                 400,
             )
 
-        # 3. Mint short-lived signed JWS token bound to action, params hash, session_id, and single-use nonce
+        # 4. Mint short-lived signed JWS token bound to action, params hash, session_id, single-use nonce, and AMR
+        amr = [auth.get("method", "biometric")] if auth else None
         token, payload = signer.sign_token(
             session_id=record["session_id"],
             action=record["action"],
@@ -178,13 +282,22 @@ class ConfirmationService:
             nonce=record["nonce"],
             ttl_seconds=settings.CONFIRMATION_TOKEN_TTL_SECONDS,
             now_ts=now,
+            amr=amr,
         )
 
-        # 4. Update status in database
+        # 5. Update status in database
         await update_confirmation_status(confirmation_id, "confirmed", token=token)
 
-        # 5. Spoken response in detected language
-        lang = detect_language(utterance)
+        # 6. Spoken response in detected language
+        lang = (
+            detect_language(utterance)
+            if utterance
+            else (
+                session.get("locale", "en")[:2]
+                if session and session.get("locale")
+                else "en"
+            )
+        )
         amount_kobo = record["params"].get("amount_kobo", 0)
         recipient = record["params"].get("recipient", "")
         spoken = build_confirmed_prompt(amount_kobo, recipient, lang=lang)

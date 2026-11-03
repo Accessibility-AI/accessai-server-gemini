@@ -1,4 +1,46 @@
 {
+  "$defs": {
+    "DeviceKey": {
+      "properties": {
+        "kid": {
+          "title": "Kid",
+          "type": "string"
+        },
+        "alg": {
+          "default": "ES256",
+          "title": "Alg",
+          "type": "string"
+        },
+        "public_key": {
+          "description": "Base64 X.509 SubjectPublicKeyInfo DER encoded ECDSA public key",
+          "title": "Public Key",
+          "type": "string"
+        },
+        "attestation_chain": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional list of base64 DER X.509 certificates proving hardware backing",
+          "title": "Attestation Chain"
+        }
+      },
+      "required": [
+        "kid",
+        "public_key"
+      ],
+      "title": "DeviceKey",
+      "type": "object"
+    }
+  },
   "properties": {
     "session_id": {
       "title": "Session Id",
@@ -7,6 +49,41 @@
     "status": {
       "title": "Status",
       "type": "string"
+    },
+    "app_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "App Id"
+    },
+    "locale": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Locale"
+    },
+    "device_key": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DeviceKey"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "metadata": {
       "additionalProperties": true,
@@ -25,7 +102,6 @@
   "required": [
     "session_id",
     "status",
-    "metadata",
     "created_at",
     "updated_at"
   ],

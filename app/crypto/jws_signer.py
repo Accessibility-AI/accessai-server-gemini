@@ -85,6 +85,7 @@ class JWSSigner:
         nonce: str,
         ttl_seconds: int = 60,
         now_ts: int | None = None,
+        amr: list[str] | None = None,
     ) -> tuple[str, dict[str, Any]]:
         """Mints a short-lived signed JWS token bound to:
 
@@ -92,6 +93,7 @@ class JWSSigner:
         - params_hash (SHA-256 of canonical params)
         - session_id
         - single-use nonce
+        - amr (authentication method reference for device audit trail, e.g. ["biometric"])
         - exp & iat
         """
         current_time = int(time.time()) if now_ts is None else now_ts
@@ -107,6 +109,8 @@ class JWSSigner:
             "iat": current_time,
             "exp": expires_at,
         }
+        if amr:
+            payload_dict["amr"] = amr
 
         token = jws.JWS(json.dumps(payload_dict))
         token.add_signature(

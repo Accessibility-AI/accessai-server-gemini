@@ -29,6 +29,26 @@
       "default": null,
       "title": "Screen Descriptor"
     },
+    "screen": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "items": {},
+          "type": "array"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Screen"
+    },
     "dialog_state": {
       "anyOf": [
         {
