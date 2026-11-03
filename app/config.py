@@ -15,8 +15,10 @@ class Settings(BaseSettings):
     DATABASE_PATH: str = "voice_intent.db"
 
     # LLM Provider configuration
-    LLM_PROVIDER: Literal["groq", "anthropic", "mock"] = "mock"
+    LLM_PROVIDER: Literal["gemini", "groq", "anthropic", "mock"] = "gemini"
     LLM_REGION: str = "US"  # Region of processing for NDPA 2023 disclosures
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-flash-lite-latest"
     GROQ_API_KEY: str = ""
     GROQ_MODEL: str = "openai/gpt-oss-120b"
     ANTHROPIC_API_KEY: str = ""

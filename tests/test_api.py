@@ -1,8 +1,14 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from app.config import settings
 from app.db.database import init_db
 from app.main import app
+
+@pytest.fixture(autouse=True)
+def setup_test_env(monkeypatch):
+    if not settings.GEMINI_API_KEY:
+        monkeypatch.setattr(settings, "LLM_PROVIDER", "mock")
 
 MANIFEST = [
     {

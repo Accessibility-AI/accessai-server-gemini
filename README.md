@@ -1,8 +1,8 @@
-# Voice Intent Service for Blind & Low-Vision Fintech Apps
+# AccessAI: Voice Intent Service with Google Gemini
 
-A high-reliability, zero-guessing voice intent interpretation service designed for Android banking applications used by blind and low-vision users in Nigeria.
+A high-reliability, zero-guessing voice intent interpretation service designed for Android banking applications used by blind and low-vision users in Nigeria — powered by **Google Gemini** function calling (`gemini-1.5-flash`, `gemini-2.0-flash`, `gemini-1.5-pro`).
 
-The service receives spoken (or typed) utterances, matches them against the host application's action manifest using tool-calling LLMs (Groq Llama 3.3 or Claude 3.5 Haiku), parses Nigerian currency expressions deterministically into kobo, generates spoken prompts strictly via static templates, and mints short-lived cryptographically signed tokens (Ed25519 / RFC 8037 JWS) upon strict verbal confirmation without LLM intervention.
+The service receives spoken (or typed) utterances across 8 languages (Nigerian English, Nigerian Pidgin, Yorùbá, Asụsụ Igbo, Harshen Hausa, French, German, and Spanish), matches them against the host application's action manifest using **Google Gemini function calling**, parses currency expressions deterministically into integer kobo, generates spoken prompts strictly via static templates, and mints short-lived cryptographically signed tokens (Ed25519 / RFC 8037 JWS) upon strict verbal confirmation without LLM intervention.
 
 ---
 
@@ -11,8 +11,8 @@ The service receives spoken (or typed) utterances, matches them against the host
 1. **Zero Execution Rights**: The service never moves money or executes any banking action. It only provides structured interpretations. The Android app and host backend execute actions only after user confirmation.
 2. **Zero Guessing on Money & Beneficiaries**:
    - Transfers missing a recipient or amount immediately trigger a deterministic clarification question.
-   - Raw amount phrases (e.g., `"5k"`, `"twenty thousand naira"`, `"N5000"`) are parsed into integer kobo deterministically. If the LLM's own estimate disagrees with the deterministic parser, it fails over to clarification.
-3. **No PII or Balances Sent to LLM**:
+   - Raw amount phrases (e.g., `"5k"`, `"twenty thousand naira"`, `"N5000"`) are parsed into integer kobo deterministically. If the LLM's estimate disagrees with the deterministic parser, it fails over to clarification.
+3. **No PII or Balances Sent to Google Gemini**:
    - The LLM only receives the sanitized utterance, the action manifest, the screen descriptor, and dialog history.
    - User account balances, beneficiary lists, PINs, and BVNs are strictly excluded.
 4. **Deterministic Spoken Prompts**:
@@ -36,12 +36,12 @@ The service receives spoken (or typed) utterances, matches them against the host
 | Method | Endpoint | Description |
 |---|---|---|
 | `POST` | `/v1/sessions` | Create or initialize a voice dialog session |
-| `POST` | `/v1/interpret` | Interpret utterance against app action manifest |
+| `POST` | `/v1/interpret` | Interpret utterance against app action manifest using Google Gemini |
 | `POST` | `/v1/confirmations/pending` | Register a pending action before confirmation |
 | `POST` | `/v1/confirmations/{id}/confirm` | Check confirmation phrase & mint signed JWS token |
 | `POST` | `/v1/confirmations/{id}/cancel` | Cancel a pending confirmation |
 | `GET` | `/.well-known/jwks.json` | Serve Ed25519 public key in standard JWKS format |
-| `GET` | `/health` | Healthcheck endpoint |
+| `GET` | `/health` | Healthcheck endpoint reporting active provider |
 
 ---
 
@@ -58,11 +58,12 @@ The deterministic parser converts Nigerian English, Pidgin, and standard express
 
 ---
 
-## Running Locally
+## Running Locally with Google Gemini
 
 ### 1. Setup Virtual Environment
 
 ```bash
+# Using uv (fastest)
 uv venv .venv --python 3.12
 .venv\Scripts\activate   # Windows
 # or: source .venv/bin/activate (Linux/macOS)
@@ -77,53 +78,46 @@ Copy `.env.example` to `.env`:
 cp .env.example .env
 ```
 
-Set `LLM_PROVIDER=groq` and supply your `GROQ_API_KEY`, or `LLM_PROVIDER=anthropic` with `ANTHROPIC_API_KEY`. For testing and offline benchmarking, `LLM_PROVIDER=mock` runs locally with zero external API calls.
+Set `LLM_PROVIDER=gemini` and supply your `GEMINI_API_KEY`:
+
+```env
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=AIzaSy...
+GEMINI_MODEL=gemini-1.5-flash
+```
+
+*(You can also use `GEMINI_MODEL=gemini-2.0-flash` or `gemini-1.5-pro`)*
 
 ### 3. Run the Service
 
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+.venv\Scripts\uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ---
 
 ## Running Tests & 150-Utterance Evals
 
-### Run Full Test Suite
+### Run Full Test Suite (33 Unit & Integration Tests)
 
 ```bash
-pytest -v
+.venv\Scripts\pytest -v
 ```
 
-### Run Benchmark Evaluator (150 Utterances)
+### Run Benchmark Evaluator (150 Multilingual Utterances)
 
 ```bash
-python tests/evals/run_evals.py
+.venv\Scripts\python tests/evals/run_evals.py
 ```
-
-Benchmark Results:
-- **Intent Classification Accuracy**: **100.0%** (Requirement: $\ge 95\%$)
-- **Guessed Transfers Emitted**: **0** (Requirement: Exactly 0)
 
 ---
 
-## Deployment
+## Provider Comparison: Gemini vs Groq vs Anthropic
 
-### Docker
-
-```bash
-docker build -t voice-intent-service .
-docker run -p 8000:8000 -e GROQ_API_KEY="your-key" voice-intent-service
-```
-
-### Fly.io
-
-```bash
-fly launch
-fly secrets set GROQ_API_KEY="your-key" LLM_PROVIDER="groq"
-fly deploy
-```
-
-### Render
-
-Deploy directly via Docker runtime or using the included `render.yaml`. Set environment variables `GROQ_API_KEY` and `LLM_PROVIDER=groq` in the Render dashboard.
+| Feature | Google Gemini (This folder) | Groq Llama 3.3 (`accessai-server`) | Anthropic Claude 3.5 |
+|---|---|---|---|
+| **Default Model** | `gemini-1.5-flash` / `gemini-2.0-flash` | `llama-3.3-70b-versatile` | `claude-3-5-haiku-20241022` |
+| **Tool Calling Format** | Gemini OpenAPI Function Declarations | OpenAI Function Tool Schema | Anthropic Input Schema |
+| **Multilingual Dialect Parsing** | Supported (8 languages) | Supported (8 languages) | Supported (8 languages) |
+| **Deterministic Parsing Gate** | Integrated | Integrated | Integrated |
+| **Offline Test Mock Mode** | Supported (`LLM_PROVIDER=mock`) | Supported (`LLM_PROVIDER=mock`) | Supported (`LLM_PROVIDER=mock`) |

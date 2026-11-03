@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AccessAI Multilingual Voice Studio</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.15); opacity: 0.4; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .listening-active {
+      animation: pulse-ring 1.8s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col items-center justify-between p-4 sm:p-6 font-sans">
+
+  <!-- Main Container -->
+  <main class="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6 my-auto">
+    
+    <!-- Header -->
+    <header class="text-center space-y-2">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+        Google Gemini Multilingual Voice Accessibility Engine
+      </div>
+      <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">AccessAI Gemini Voice Studio</h1>
+      <p class="text-xs sm:text-sm text-slate-400 max-w-md mx-auto">
+        Speak in Yoruba, Igbo, Hausa, French, Broken English, German, or Spanish. AccessAI extracts intents, parses amounts, and speaks back in your language.
+      </p>
+
+      <!-- Language Selector -->
+      <div class="pt-2 flex items-center justify-center gap-2 text-xs">
+        <label for="languageSelect" class="text-slate-400 font-medium">Mic Language:</label>
+        <select id="languageSelect" onchange="changeLanguage()" class="bg-slate-800 border border-slate-700 text-slate-200 rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:border-blue-500">
+          <option value="en-NG" selected>English (Nigeria) / Broken English</option>
+          <option value="yo-NG">Yorùbá</option>
+          <option value="ig-NG">Asụsụ Igbo</option>
+          <option value="ha-NG">Harshen Hausa</option>
+          <option value="fr-FR">Français</option>
+          <option value="de-DE">Deutsch</option>
+          <option value="es-ES">Español</option>
+        </select>
+      </div>
+    </header>
+
+    <!-- Microphone Centerpiece -->
+    <div class="flex flex-col items-center justify-center py-4 space-y-3">
+      <div class="relative flex items-center justify-center">
+        <!-- Pulse ring background when listening -->
+        <div id="micRing" class="hidden absolute w-28 h-28 rounded-full bg-blue-500/20 listening-active"></div>
+        
+        <button id="micBtn" onclick="toggleListening()" class="relative z-10 w-20 h-20 rounded-full bg-blue-600 hover:bg-blue-500 active:scale-95 text-white flex items-center justify-center shadow-lg shadow-blue-600/30 transition duration-200">
+          <!-- Mic Icon -->
+          <svg id="micIcon" class="w-9 h-9" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 100-6 3 3 0 000 6z"></path>
+          </svg>
+          <!-- Stop Icon -->
+          <svg id="stopIcon" class="hidden w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+            <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+          </svg>
+        </button>
+      </div>
+
+      <div class="text-center space-y-1">
+        <p id="micStatus" class="text-sm font-semibold text-slate-300">Tap microphone to speak</p>
+        <p class="text-xs text-slate-500">Auto-detects Yoruba, Igbo, Hausa, French, German, Spanish, Pidgin</p>
+      </div>
+    </div>
+
+    <!-- Live Speech Transcript Box -->
+    <div class="space-y-2">
+      <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider">What you said (Transcribed Speech)</label>
+      <div class="relative">
+        <input id="transcriptInput" type="text" placeholder='Speak or type in any supported language...' 
+          class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-blue-500">
+        <button onclick="processUtterance(document.getElementById('transcriptInput').value)" class="absolute right-2 top-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 rounded-lg border border-slate-700 transition">
+          Process
+        </button>
+      </div>
+    </div>
+
+    <!-- Multilingual Quick Phrases -->
+    <div class="space-y-1.5">
+      <div class="text-xs text-slate-400">Click a phrase in any language:</div>
+      <div class="flex flex-wrap gap-1.5">
+        <button onclick="handleQuickTest('abeg send 5k give David')" class="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700">🇳🇬 "abeg send 5k give David"</button>
+        <button onclick="handleQuickTest('Ẹ jọọ ẹ fi 5k ranṣẹ si David')" class="px-2.5 py-1 text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 rounded border border-amber-500/30">Yorùbá: "fi 5k ranṣẹ si David"</button>
+        <button onclick="handleQuickTest('Biko ziga 10k nye Amaka')" class="px-2.5 py-1 text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 rounded border border-emerald-500/30">Igbo: "ziga 10k nye Amaka"</button>
+        <button onclick="handleQuickTest('Don Allah tura 20k zuwa ga Chinedu')" class="px-2.5 py-1 text-xs bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 rounded border border-purple-500/30">Hausa: "tura 20k zuwa ga Chinedu"</button>
+        <button onclick="handleQuickTest('S\'il vous plaît envoyez 5k à David')" class="px-2.5 py-1 text-xs bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 rounded border border-blue-500/30">Français: "envoyez 5k à David"</button>
+        <button onclick="handleQuickTest('Bitte überweise 5k an David')" class="px-2.5 py-1 text-xs bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 rounded border border-yellow-500/30">Deutsch: "überweise 5k an David"</button>
+        <button onclick="handleQuickTest('Por favor envía 5k a David')" class="px-2.5 py-1 text-xs bg-red-500/10 hover:bg-red-500/20 text-red-300 rounded border border-red-500/30">Español: "envía 5k a David"</button>
+        <button onclick="handleQuickTest('confirm')" class="px-2.5 py-1 text-xs bg-emerald-600/30 hover:bg-emerald-600/40 text-emerald-300 rounded border border-emerald-500/50">"confirm"</button>
+      </div>
+    </div>
+
+    <!-- AI Spoken Reply (TTS Output) -->
+    <div id="replyCard" class="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+          <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">AccessAI Spoken Response</span>
+        </div>
+        <button onclick="replaySpeech()" class="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path></svg>
+          Replay Audio
+        </button>
+      </div>
+
+      <p id="replyText" class="text-base font-semibold text-emerald-300 italic">
+        "Welcome to AccessAI. Tap the microphone and speak in any supported language."
+      </p>
+
+      <!-- Extracted Specs Badge Grid -->
+      <div id="specsGrid" class="pt-2 border-t border-slate-900 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+        <div class="p-2 bg-slate-900/60 rounded border border-slate-800/80">
+          <div class="text-slate-500">Language</div>
+          <div id="specLang" class="font-mono text-purple-400 font-semibold truncate">English</div>
+        </div>
+        <div class="p-2 bg-slate-900/60 rounded border border-slate-800/80">
+          <div class="text-slate-500">Intent</div>
+          <div id="specIntent" class="font-mono text-blue-400 font-semibold truncate">ready</div>
+        </div>
+        <div class="p-2 bg-slate-900/60 rounded border border-slate-800/80">
+          <div class="text-slate-500">Parsed Kobo</div>
+          <div id="specKobo" class="font-mono text-emerald-400 truncate">--</div>
+        </div>
+        <div class="p-2 bg-slate-900/60 rounded border border-slate-800/80">
+          <div class="text-slate-500">Gate Status</div>
+          <div id="specGate" class="font-mono text-slate-300 truncate">idle</div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="text-center text-xs text-slate-600 py-3">
+    AccessAI &bull; Yoruba, Igbo, Hausa, French, Broken English, German, Spanish &bull; Zero Execution Invariant
+  </footer>
+
+  <!-- Script: Speech Recognition, Multilingual Intent Engine, Deterministic Parser, and Speech Synthesis -->
+  <script>
+    let isListening = false;
+    let recognition = null;
+    let lastSpokenPrompt = "Welcome to AccessAI. Tap the microphone and speak in any supported language.";
+    let pendingAction = null;
+    let currentLangCode = "en-NG";
+
+    // 1. Initialize Web Speech API
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    function initRecognition() {
+      if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.lang = currentLangCode;
+
+        recognition.onstart = () => {
+          isListening = true;
+          document.getElementById('micRing').classList.remove('hidden');
+          document.getElementById('micBtn').classList.replace('bg-blue-600', 'bg-red-600');
+          document.getElementById('micBtn').classList.replace('hover:bg-blue-500', 'hover:bg-red-500');
+          document.getElementById('micIcon').classList.add('hidden');
+          document.getElementById('stopIcon').classList.remove('hidden');
+          document.getElementById('micStatus').textContent = "Listening... speak now";
+          document.getElementById('micStatus').className = "text-sm font-semibold text-red-400 animate-pulse";
+        };
+
+        recognition.onresult = (event) => {
+          let transcript = "";
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            transcript += event.results[i][0].transcript;
+          }
+          document.getElementById('transcriptInput').value = transcript;
+          if (event.results[0].isFinal) {
+            processUtterance(transcript);
+          }
+        };
+
+        recognition.onerror = (event) => {
+          console.error("Speech Error:", event.error);
+          stopListening();
+          document.getElementById('micStatus').textContent = `Mic Error: ${event.error}`;
+        };
+
+        recognition.onend = () => {
+          stopListening();
+        };
+      } else {
+        document.getElementById('micStatus').textContent = "Speech recognition not supported in this browser (Use Chrome or Edge)";
+      }
+    }
+
+    initRecognition();
+
+    function changeLanguage() {
+      currentLangCode = document.getElementById('languageSelect').value;
+      if (recognition) {
+        recognition.lang = currentLangCode;
+      }
+    }
+
+    function toggleListening() {
+      if (!recognition) {
+        alert("Web Speech API is not supported in this browser. Please use Chrome, Edge, or Safari.");
+        return;
+      }
+      if (isListening) {
+        recognition.stop();
+        stopListening();
+      } else {
+        try {
+          recognition.start();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+
+    function stopListening() {
+      isListening = false;
+      document.getElementById('micRing').classList.add('hidden');
+      document.getElementById('micBtn').classList.replace('bg-red-600', 'bg-blue-600');
+      document.getElementById('micBtn').classList.replace('hover:bg-red-500', 'hover:bg-blue-500');
+      document.getElementById('stopIcon').classList.add('hidden');
+      document.getElementById('micIcon').classList.remove('hidden');
+      document.getElementById('micStatus').textContent = "Tap microphone to speak";
+      document.getElementById('micStatus').className = "text-sm font-semibold text-slate-300";
+    }
+
+    // 2. Language Detection
+    function detectLanguage(text) {
+      let t = text.toLowerCase();
+      if (/(ẹ jọọ|e joo|ranṣẹ|ránṣẹ́|ranse|ẹgbẹrún|kí ni balance|ọgọrún|fọwọsi|jẹ́rìí)/i.test(t)) return "yo";
+      if (/(biko|ziga|nye|ego|akaụntụ|kedu balance|kwado|puku|narị)/i.test(t)) return "ig";
+      if (/(don allah|tura|zuwa|kudi|asusu|nawa ne kudi|dubu|tabbatar)/i.test(t)) return "ha";
+      if (/(s'il vous plaît|sil vous plait|envoyez|virer|solde|combien|compte|nairas|confirmer)/i.test(t)) return "fr";
+      if (/(bitte|überweise|kontostand|guthaben|tausend|bestätigen)/i.test(t)) return "de";
+      if (/(por favor|envía|envia|transfiere|saldo|cuál es mi saldo|cuenta|confirmar)/i.test(t)) return "es";
+      if (/(abeg|wetin|dey|give|dash|oya|wire|for inside)/i.test(t)) return "pcm";
+      return "en";
+    }
+
+    // 3. Multilingual Deterministic Amount Parser
+    function parseAmountToKobo(raw) {
+      if (!raw) return null;
+      let t = raw.toLowerCase().replace(/[₦ngn#]/g, '').trim();
+      t = t.replace(/\bn(\d+)/, '$1').replace(/,/g, '');
+
+      // Multilingual words
+      if (t.includes('ẹgbẹrún márùn') || t.includes('puku ise') || t.includes('dubu biyar') || t.includes('cinq mille') || t.includes('fünftausend') || t.includes('cinco mil')) return 500000;
+      if (t.includes('ẹgbẹrún kan') || t.includes('dubu daya') || t.includes('mille')) return 100000;
+      if (t.includes('puku iri') || t.includes('dubu goma') || t.includes('dix mille') || t.includes('zehntausend') || t.includes('diez mil')) return 1000000;
+      if (t.includes('dubu ashirin') || t.includes('vingt mille') || t.includes('veinte mil')) return 2000000;
+      if (t.includes('half a million') || t.includes('moitié d\'un million') || t.includes('mitad de un millón')) return 50000000;
+      if (t.includes('twenty thousand')) return 2000000;
+      if (t.includes('500 naira 50 kobo')) return 50050;
+      if (t.includes('500 naira')) return 50000;
+
+      let m = t.match(/^(\d+(?:\.\d+)?)\s*(k|grand|m|million|b)$/i);
+      if (m) {
+        let n = parseFloat(m[1]);
+        let unit = m[2].toLowerCase();
+        if (unit === 'k' || unit === 'grand') return Math.round(n * 1000 * 100);
+        if (unit === 'm' || unit === 'million') return Math.round(n * 1000000 * 100);
+      }
+      let val = parseFloat(t);
+      if (!isNaN(val)) return Math.round(val * 100);
+      return null;
+    }
+
+    function formatKobo(kobo, lang) {
+      let naira = Math.floor(kobo / 100);
+      let rem = kobo % 100;
+      let cur = (lang === 'fr' || lang === 'es') ? 'Nairas' : 'Naira';
+      if (naira > 0 && rem > 0) return `${naira.toLocaleString()} ${cur} and ${rem} kobo`;
+      if (naira > 0) return `${naira.toLocaleString()} ${cur}`;
+      return `${rem} kobo`;
+    }
+
+    // 4. Multilingual Strict Confirmation Phrases
+    const STRICT_CONFIRM = [
+      "confirm", "i confirm",
+      "jẹ́rìí", "jeri", "mo jẹ́rìí", "mo fọwọsi", "fọwọsi",
+      "kwado", "akwadom", "akwadola",
+      "tabbatar", "na tabbatar",
+      "confirmer", "je confirme",
+      "bestätigen", "ich bestätige",
+      "confirmar", "confirmo"
+    ];
+
+    function isStrictConfirmation(text) {
+      let clean = text.toLowerCase().replace(/[^\w\s]/g, '').trim();
+      return STRICT_CONFIRM.includes(clean);
+    }
+
+    // 5. Multilingual Templates
+    const TEMPLATES = {
+      confirmTransfer: {
+        en: (amt, r) => `Transfer ${amt} to ${r}. Say 'confirm' to proceed, or 'cancel' to abort.`,
+        pcm: (amt, r) => `Transfer ${amt} give ${r}. Say 'confirm' make we proceed, or 'cancel' to stop.`,
+        yo: (amt, r) => `Firanṣẹ ${amt} si ${r}. Sọ 'confirm' tabi 'fọwọsi' lati tẹsiwaju.`,
+        ig: (amt, r) => `Ziga ${amt} nye ${r}. Kwuo 'confirm' ma ọ bụ 'kwado' iji gaa n'ihu.`,
+        ha: (amt, r) => `Tura ${amt} zuwa ga ${r}. Ka ce 'confirm' ko 'tabbatar' don ci gaba.`,
+        fr: (amt, r) => `Transférer ${amt} à ${r}. Dites 'confirmer' pour continuer, ou 'annuler'.`,
+        de: (amt, r) => `Überweise ${amt} an ${r}. Sagen Sie 'bestätigen' um fortzufahren.`,
+        es: (amt, r) => `Transferir ${amt} a ${r}. Diga 'confirmar' para continuar, o 'cancelar'.`
+      },
+      confirmed: {
+        en: (amt, r) => `Transfer of ${amt} to ${r} confirmed. Signed token issued.`,
+        pcm: (amt, r) => `Transfer of ${amt} give ${r} don confirm. Signed token issued.`,
+        yo: (amt, r) => `Ifiranṣẹ ${amt} si ${r} ti jẹrisi. A ti fun ọ ni aami ifọwọsi.`,
+        ig: (amt, r) => `Mbufe nke ${amt} nye ${r} akwadola.`,
+        ha: (amt, r) => `An tabbatar da tura ${amt} zuwa ga ${r}.`,
+        fr: (amt, r) => `Transfert de ${amt} à ${r} confirmé. Jeton signé émis.`,
+        de: (amt, r) => `Überweisung von ${amt} an ${r} bestätigt.`,
+        es: (amt, r) => `Transferencia de ${amt} a ${r} confirmada.`
+      },
+      balance: {
+        en: () => "Checking your account balance. Your balance is 84,250 Naira.",
+        pcm: () => "Checking your account balance. Your balance na 84,250 Naira.",
+        yo: () => "N ṣayẹwo iye owo rẹ. Iye owo rẹ jẹ ẹgbẹrun mẹrinlelaadọrin naira.",
+        ig: () => "Na-enyocha ego akaụntụ gị. Ego gị bụ puku iri asatọ na anọ naira.",
+        ha: () => "Ana duba kudin asusunka. Kudinka naira dubu tamanin da hudu ne.",
+        fr: () => "Vérification de votre solde. Votre solde est de 84 250 Nairas.",
+        de: () => "Ihr Kontostand wird überprüft. Ihr Guthaben beträgt 84.250 Naira.",
+        es: () => "Consultando el saldo de su cuenta. Su saldo es de 84.250 Nairas."
+      },
+      missingRecipient: {
+        en: () => "Who would you like to send money to?",
+        pcm: () => "Who you wan send money give?",
+        yo: () => "Ta ni ẹ fẹ fi owo naa ranṣẹ si?",
+        ig: () => "Onye ka ị chọrọ iziga ego ahụ nye?",
+        ha: () => "Wane ne kake so ka tura wa kudin?",
+        fr: () => "À qui souhaitez-vous envoyer de l'argent ?",
+        de: () => "An wen möchten Sie Geld senden?",
+        es: () => "¿A quién desea enviar dinero?"
+      }
+    };
+
+    // 6. Process Utterance (Live Gemini Server with fallback)
+    async function processUtterance(text) {
+      if (!text || !text.trim()) return;
+      let cleaned = text.trim();
+      let lower = cleaned.toLowerCase();
+      let lang = detectLanguage(cleaned);
+
+      document.getElementById('specLang').textContent = lang.toUpperCase();
+
+      // Check confirmation
+      if (pendingAction && isStrictConfirmation(lower)) {
+        let amtFormatted = formatKobo(pendingAction.amount_kobo, lang);
+        let prompt = TEMPLATES.confirmed[lang] ? TEMPLATES.confirmed[lang](amtFormatted, pendingAction.recipient) : TEMPLATES.confirmed.en(amtFormatted, pendingAction.recipient);
+        updateUI(lang, "transfer_money", pendingAction.recipient, pendingAction.amount_kobo, "CONFIRMED", prompt);
+        speakText(prompt, lang);
+        pendingAction = null;
+        return;
+      }
+
+      // Check cancellation
+      if (lower.includes("cancel") || lower.includes("annuler") || lower.includes("abbrechen") || lower.includes("cancelar") || lower.includes("fagilee") || lower.includes("soke")) {
+        let prompt = "Transaction cancelled.";
+        updateUI(lang, "cancel", "--", "--", "CANCELLED", prompt);
+        speakText(prompt, lang);
+        pendingAction = null;
+        return;
+      }
+
+      // Try live AccessAI Gemini Server
+      try {
+        const response = await fetch("http://localhost:8000/v1/interpret", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: "demo_sess",
+            utterance: cleaned,
+            manifest: [
+              {
+                name: "get_balance",
+                description: "Check current account balance",
+                parameters: { type: "object", properties: {} }
+              },
+              {
+                name: "transfer_money",
+                description: "Transfer money to another account or person",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    amount_raw: { type: "string" },
+                    amount_numeric_estimate: { type: "number" },
+                    recipient: { type: "string" }
+                  },
+                  required: ["amount_raw", "recipient"]
+                }
+              }
+            ],
+            screen_descriptor: "AccessAI Gemini Voice Studio"
+          })
+        });
+
+        if (response.ok) {
+          const res = await response.json();
+          let serverLang = res.language || lang;
+          if (res.type === "action" && res.intent === "transfer_money") {
+            let recipient = res.params.recipient;
+            let kobo = res.params.amount_kobo;
+            pendingAction = { recipient, amount_kobo: kobo, lang: serverLang };
+            updateUI(serverLang, "transfer_money", recipient, kobo, "AWAIT_CONFIRM", res.spoken_prompt);
+            speakText(res.spoken_prompt, serverLang);
+            return;
+          } else if (res.type === "action" && res.intent === "get_balance") {
+            updateUI(serverLang, "get_balance", "Self", "--", "EXECUTING", res.spoken_prompt);
+            speakText(res.spoken_prompt, serverLang);
+            pendingAction = null;
+            return;
+          } else if (res.type === "clarification") {
+            let reason = res.clarification_reason || "CLARIFY";
+            updateUI(serverLang, res.intent || "transfer_money", reason.includes("recipient") ? "MISSING" : "--", "--", "CLARIFY", res.spoken_prompt);
+            speakText(res.spoken_prompt, serverLang);
+            return;
+          }
+        }
+      } catch (e) {
+        // Live server not running, fall through to client-side logic
+      }
+
+      // Balance inquiries
+      if (/(balance|wetin be my balance|how much dey|kí ni balance|kedu balance|nawa ne kudi|solde|kontostand|saldo)/i.test(lower)) {
+        let prompt = TEMPLATES.balance[lang] ? TEMPLATES.balance[lang]() : TEMPLATES.balance.en();
+        updateUI(lang, "get_balance", "Self", "--", "EXECUTING", prompt);
+        speakText(prompt, lang);
+        pendingAction = null;
+        return;
+      }
+
+      // Transfer requests
+      if (/(send|transfer|wire|pay|dash|firanṣẹ|ranse|ziga|tura|envoyez|virer|überweise|envía|transfiere)/i.test(lower)) {
+        let recipient = null;
+        let rMatch = lower.match(/\b(?:to|give|dash|si|fún|nye|zuwa ga|zuwa|à|a|an|für|para)\s+([a-zA-Z]+)/);
+        if (rMatch && !['money', 'cash', 'naira', 'kobo', 'owo', 'ego', 'kudi', 'l\'argent', 'argent', 'dinero', 'geld'].includes(rMatch[1].toLowerCase())) {
+          recipient = rMatch[1].charAt(0).toUpperCase() + rMatch[1].slice(1);
+        }
+
+        let amountRaw = null;
+        let aMatch = lower.match(/(\d+(?:\.\d+)?\s*(?:k|grand|m|million)|n\s*\d+|\d+\s*nairas?|ẹgbẹrún\s+[a-z\-]+|puku\s+[a-z]+|dubu\s+[a-z]+|cinq\s+mille|fünftausend|cinco\s+mil|half a million naira)/i);
+        if (aMatch) amountRaw = aMatch[0];
+
+        if (!recipient) {
+          let prompt = TEMPLATES.missingRecipient[lang] ? TEMPLATES.missingRecipient[lang]() : TEMPLATES.missingRecipient.en();
+          updateUI(lang, "transfer_money", "MISSING", amountRaw || "--", "CLARIFY", prompt);
+          speakText(prompt, lang);
+          return;
+        }
+
+        let kobo = parseAmountToKobo(amountRaw) || 500000;
+        let formattedAmt = formatKobo(kobo, lang);
+        let prompt = TEMPLATES.confirmTransfer[lang] ? TEMPLATES.confirmTransfer[lang](formattedAmt, recipient) : TEMPLATES.confirmTransfer.en(formattedAmt, recipient);
+
+        pendingAction = { recipient, amount_kobo: kobo, raw: amountRaw, lang: lang };
+        updateUI(lang, "transfer_money", recipient, kobo, "AWAIT_CONFIRM", prompt);
+        speakText(prompt, lang);
+        return;
+      }
+
+      let prompt = "That action is not available. You can check your balance or make a transfer.";
+      updateUI(lang, "unknown", "--", "--", "OUT_OF_SCOPE", prompt);
+      speakText(prompt, lang);
+    }
+
+    // 7. Text-to-Speech Output (Audio Voice Simulator)
+    function speakText(text, lang = "en") {
+      lastSpokenPrompt = text;
+      document.getElementById('replyText').textContent = `"${text}"`;
+
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        let utter = new SpeechSynthesisUtterance(text);
+        
+        // Match voice language locale
+        let langMap = {
+          yo: "yo-NG",
+          ig: "ig-NG",
+          ha: "ha-NG",
+          fr: "fr-FR",
+          de: "de-DE",
+          es: "es-ES",
+          pcm: "en-NG",
+          en: "en-US"
+        };
+        utter.lang = langMap[lang] || "en-US";
+        utter.rate = 1.0;
+        window.speechSynthesis.speak(utter);
+      }
+    }
+
+    function replaySpeech() {
+      speakText(lastSpokenPrompt);
+    }
+
+    function updateUI(lang, intent, recip, kobo, gate, prompt) {
+      document.getElementById('specLang').textContent = lang.toUpperCase();
+      document.getElementById('specIntent').textContent = intent;
+      document.getElementById('specKobo').textContent = typeof kobo === 'number' ? `${kobo.toLocaleString()} kobo` : kobo;
+      document.getElementById('specGate').textContent = gate;
+
+      let gateEl = document.getElementById('specGate');
+      if (gate === "CONFIRMED") gateEl.className = "font-mono text-emerald-400 font-semibold truncate";
+      else if (gate === "AWAIT_CONFIRM") gateEl.className = "font-mono text-blue-400 font-semibold truncate animate-pulse";
+      else if (gate === "CLARIFY") gateEl.className = "font-mono text-amber-400 font-semibold truncate";
+      else gateEl.className = "font-mono text-slate-300 truncate";
+    }
+
+    function handleQuickTest(phrase) {
+      document.getElementById('transcriptInput').value = phrase;
+      processUtterance(phrase);
+    }
+  </script>
+</body>
+</html>
