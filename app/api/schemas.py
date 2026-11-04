@@ -55,8 +55,8 @@ class InterpretRequest(BaseModel):
     manifest: list[dict[str, Any]] | None = None
     screen_descriptor: str | None = None
     screen: Any = None
-    dialog: dict[str, Any] | None = None
-    dialog_state: dict[str, Any] | None = None
+    dialog: dict[str, Any] | list[Any] | None = None
+    dialog_state: dict[str, Any] | list[Any] | None = None
     locale: str | None = None
 
 
