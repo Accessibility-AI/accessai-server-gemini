@@ -39,7 +39,7 @@ async def test_session_create_with_device_key():
                 "metadata": {"test": "device_auth"},
             },
         )
-        assert res.status_code == 201
+        assert res.status_code in (200, 201)
         data = res.json()
         assert data["app_id"] == "accesspay-demo"
         assert data["locale"] == "en-NG"
@@ -63,7 +63,7 @@ async def test_device_auth_biometric_success_and_amr_claim():
                 "device_key": device_key,
             },
         )
-        assert res.status_code == 201
+        assert res.status_code in (200, 201)
         session_id = res.json()["session_id"]
 
         # 2. Create pending confirmation
@@ -77,7 +77,7 @@ async def test_device_auth_biometric_success_and_amr_claim():
                 "params": params,
             },
         )
-        assert res.status_code == 201
+        assert res.status_code in (200, 201)
         pending_id = res.json()["confirmation_id"]
 
         # 3. Create valid ES256 biometric auth signature

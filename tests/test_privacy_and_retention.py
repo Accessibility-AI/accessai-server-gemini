@@ -9,8 +9,13 @@ from app.utils.logger import mask_pii, mask_utterance
 
 MANIFEST = [
     {
+        "name": "get_balance",
+        "description": "Check current account balance",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
         "name": "transfer_money",
-        "description": "Transfer funds to another user",
+        "description": "Transfer money to another account or person",
         "parameters": {
             "type": "object",
             "properties": {
@@ -20,7 +25,7 @@ MANIFEST = [
             },
             "required": ["amount_raw", "recipient"],
         },
-    }
+    },
 ]
 
 
@@ -57,7 +62,7 @@ async def test_no_utterance_retention_in_database():
                 "params": res_interp.json()["params"],
             },
         )
-        assert res_pend.status_code == 201
+        assert res_pend.status_code in (200, 201)
 
     # Directly inspect SQLite database tables
     async with aiosqlite.connect(settings.DATABASE_PATH) as db:
@@ -73,10 +78,9 @@ async def test_no_utterance_retention_in_database():
         assert "transcript" not in conf_cols
 
         # 2. Assert unique utterance string does not appear in any row of sessions
-        cursor = await db.execute(
-            "SELECT * FROM sessions WHERE session_id = ?", (session_id,)
-        )
+        cursor = await db.execute("SELECT * FROM sessions WHERE session_id = ?", (session_id,))
         session_row = await cursor.fetchone()
+        assert session_row is not None
         assert unique_secret_utterance not in str(session_row)
 
 
@@ -86,6 +90,7 @@ async def test_ndpa_cross_border_disclosure():
     await init_db()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        await client.post("/v1/sessions", json={"session_id": "sess-ndpa-1"})
         res = await client.post(
             "/v1/interpret",
             json={

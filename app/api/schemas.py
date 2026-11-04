@@ -74,6 +74,7 @@ class InterpretResponse(BaseModel):
     type: str | None = None
     intent: str | None = None
     spoken_prompt: str | None = None
+    clarification_reason: str | None = None
     language: str = "en"
     provider: str | None = None
     processing_region: str | None = None

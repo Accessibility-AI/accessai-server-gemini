@@ -2,6 +2,7 @@ import base64
 import hashlib
 import json
 import os
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -34,10 +35,17 @@ class JWSSigner:
 
     def __init__(self, private_key_b64: str = "", kid: str = "voice-intent-key-1"):
         self.kid = kid
+        is_test_env = "pytest" in sys.modules or bool(os.environ.get("PYTEST_CURRENT_TEST")) or settings.APP_ENV in ("test", "development")
         if private_key_b64:
             raw_bytes = base64.b64decode(private_key_b64)
             self._private_key = ed25519.Ed25519PrivateKey.from_private_bytes(raw_bytes)
-        elif settings.APP_ENV == "production" and not os.environ.get("PYTEST_CURRENT_TEST"):
+        elif KEY_FILE_PATH.exists() and not is_test_env:
+            try:
+                raw_bytes = base64.b64decode(KEY_FILE_PATH.read_text().strip())
+                self._private_key = ed25519.Ed25519PrivateKey.from_private_bytes(raw_bytes)
+            except Exception:
+                self._private_key = ed25519.Ed25519PrivateKey.generate()
+        elif settings.APP_ENV == "production" and not is_test_env:
             raise RuntimeError(
                 "ED25519_PRIVATE_KEY_B64 must be set in production to ensure host backends can verify tokens across deploys and restarts."
             )
@@ -136,8 +144,11 @@ class JWSSigner:
             "iss": "accessai",
             "sub": session_id,
             "aid": action,
+            "action": action,
             "ph": ph,
+            "params_hash": ph,
             "jti": nonce,
+            "nonce": nonce,
             "iat": current_time,
             "exp": expires_at,
         }

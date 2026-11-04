@@ -12,9 +12,17 @@ ENV/
 .env
 *.env
 
+# Cryptographic private keys
+.ed25519_key*
+*.key
+*.pem
+
 # SQLite Databases
 *.db
 *.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
 
 # Pytest & Coverage
 .pytest_cache/

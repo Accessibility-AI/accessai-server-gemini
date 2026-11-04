@@ -118,6 +118,7 @@ class InterpreterService:
         control: str | None = None,
         message: str | None = None,
         spoken_prompt: str | None = None,
+        clarification_reason: str | None = None,
         language: str = "en",
     ) -> InterpretResponse:
         provider_name = settings.LLM_PROVIDER
@@ -146,6 +147,7 @@ class InterpreterService:
             type=legacy_type,
             intent=action_id,
             spoken_prompt=prompt,
+            clarification_reason=clarification_reason,
             language=language,
             provider=provider_name,
             processing_region=region,
@@ -266,6 +268,7 @@ class InterpreterService:
                 confidence=llm_result.confidence,
                 message=msg,
                 spoken_prompt=msg,
+                clarification_reason="low_confidence",
                 language=lang,
             )
 
@@ -277,6 +280,7 @@ class InterpreterService:
                 confidence=llm_result.confidence,
                 message=msg,
                 spoken_prompt=msg,
+                clarification_reason="unknown_tool",
                 language=lang,
             )
 
@@ -287,6 +291,7 @@ class InterpreterService:
                 confidence=llm_result.confidence,
                 message=msg,
                 spoken_prompt=msg,
+                clarification_reason="multiple_tools",
                 language=lang,
             )
 
@@ -303,6 +308,7 @@ class InterpreterService:
                 confidence=llm_result.confidence,
                 message=msg,
                 spoken_prompt=msg,
+                clarification_reason="unknown_tool",
                 language=lang,
             )
 
@@ -335,6 +341,7 @@ class InterpreterService:
                     confidence=llm_result.confidence,
                     message=msg,
                     spoken_prompt=msg,
+                    clarification_reason="missing_amount_and_recipient",
                     language=lang,
                 )
 
@@ -354,6 +361,7 @@ class InterpreterService:
                     confidence=llm_result.confidence,
                     message=msg,
                     spoken_prompt=msg,
+                    clarification_reason="missing_recipient",
                     language=lang,
                 )
 
@@ -367,6 +375,7 @@ class InterpreterService:
                     confidence=llm_result.confidence,
                     message=msg,
                     spoken_prompt=msg,
+                    clarification_reason="missing_amount",
                     language=lang,
                 )
 
@@ -390,6 +399,7 @@ class InterpreterService:
                     confidence=llm_result.confidence,
                     message=msg,
                     spoken_prompt=msg,
+                    clarification_reason="unparseable_amount",
                     language=lang,
                 )
 
@@ -408,6 +418,7 @@ class InterpreterService:
                             confidence=llm_result.confidence,
                             message=msg,
                             spoken_prompt=msg,
+                            clarification_reason="amount_mismatch",
                             language=lang,
                         )
                 except (ValueError, TypeError):

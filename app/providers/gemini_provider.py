@@ -278,19 +278,11 @@ class GeminiProvider(BaseLLMProvider):
 
         # Compute dynamic confidence based on model response quality
         if not tool_calls_out:
-            confidence = 0.35
+            confidence = 0.5
         elif finish_reason != "STOP":
             confidence = 0.45
         else:
-            args = tool_calls_out[0].arguments or {}
-            if not args:
-                confidence = 0.65
-            elif "recipient" in args and not args.get("recipient"):
-                confidence = 0.70
-            elif "amount_raw" in args and not args.get("amount_raw"):
-                confidence = 0.70
-            else:
-                confidence = 0.95
+            confidence = 0.95
 
         return LLMInterpretationResult(
             tool_calls=tool_calls_out,

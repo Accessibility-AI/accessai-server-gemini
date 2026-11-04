@@ -18,7 +18,11 @@ class MockLLMProvider(BaseLLMProvider):
         screen_descriptor: str | None = None,
         dialog_state: dict[str, Any] | None = None,
     ) -> LLMInterpretationResult:
-        manifest_names = {item["name"] for item in manifest}
+        manifest_names = {
+            item.get("id") for item in manifest if item.get("id")
+        } | {
+            item.get("name") for item in manifest if item.get("name")
+        }
         text = utterance.strip().lower()
 
         # 1. Check for balance inquiries in all 8 languages
@@ -105,8 +109,8 @@ class MockLLMProvider(BaseLLMProvider):
 
             # Recipient extraction across languages
             recip_patterns = [
-                # English / Pidgin: to David, give David, dash David
-                r"\b(?:to|give|dash)\s+([a-zA-Z]+)(?:\s|$)",
+                # English / Pidgin: to David, give David, dash David, for David, to [number removed] for David
+                r"\b(?:to|give|dash|for)\s+(?:\[number removed\]\s+for\s+)?([a-zA-Z]+)(?:\s|$)",
                 r"\b(?:send|transfer|wire|pay)\s+([a-zA-Z]+)\s+(?:₦|n|\d+|some|money)",
                 # Yoruba: si David, fún David
                 r"\b(?:si|fún|fun)\s+([a-zA-Z]+)(?:\s|$)",
