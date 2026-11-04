@@ -9,8 +9,10 @@ from app.config import settings
 
 
 async def init_db():
-    """Initializes SQLite database and tables."""
+    """Initializes SQLite database and tables with WAL mode for concurrency."""
     async with aiosqlite.connect(settings.DATABASE_PATH) as db:
+        await db.execute("PRAGMA journal_mode = WAL;")
+        await db.execute("PRAGMA synchronous = NORMAL;")
         await db.execute("""
             CREATE TABLE IF NOT EXISTS sessions (
                 session_id TEXT PRIMARY KEY,
@@ -60,6 +62,7 @@ async def create_session(
     app_id: str | None = None,
     locale: str | None = None,
 ) -> dict[str, Any]:
+    """Creates or updates a session. Does not fail on duplicate session_id."""
     sid = session_id or str(uuid.uuid4())
     now = int(time.time())
     meta_str = json.dumps(metadata or {})
@@ -74,10 +77,17 @@ async def create_session(
             INSERT INTO sessions (
                 session_id, status, metadata_json, device_key_json, app_id, locale, created_at, updated_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(session_id) DO UPDATE SET
+                metadata_json = coalesce(excluded.metadata_json, sessions.metadata_json),
+                device_key_json = coalesce(excluded.device_key_json, sessions.device_key_json),
+                app_id = coalesce(excluded.app_id, sessions.app_id),
+                locale = coalesce(excluded.locale, sessions.locale),
+                updated_at = excluded.updated_at
             """,
             (sid, "active", meta_str, dk_str, app_id, locale, now, now),
         )
         await db.commit()
+
     return {
         "session_id": sid,
         "status": "active",
@@ -122,12 +132,13 @@ async def create_pending_confirmation(
     params_hash: str,
     spoken_prompt: str,
     ttl_seconds: int = 60,
+    confirmation_id: str | None = None,
 ) -> dict[str, Any]:
-    conf_id = str(uuid.uuid4())
+    conf_id = confirmation_id or f"pc_{uuid.uuid4().hex[:16]}"
     nonce = uuid.uuid4().hex
     now = int(time.time())
     expires_at = now + ttl_seconds
-    params_str = json.dumps(params)
+    params_str = json.dumps(params, ensure_ascii=False)
 
     async with aiosqlite.connect(settings.DATABASE_PATH) as db:
         await db.execute(
@@ -153,6 +164,7 @@ async def create_pending_confirmation(
         await db.commit()
 
     return {
+        "pending_id": conf_id,
         "confirmation_id": conf_id,
         "session_id": session_id,
         "action": action,
@@ -188,6 +200,32 @@ async def get_confirmation(conf_id: str) -> dict[str, Any] | None:
                 "created_at": row["created_at"],
                 "expires_at": row["expires_at"],
             }
+
+
+async def claim_confirmation_atomically(conf_id: str) -> bool:
+    """Atomically transitions status from 'pending' to 'confirmed'.
+
+    Guarantees single use under extreme concurrency: returns True if and only if
+    this caller won the race (rowcount == 1).
+    """
+    async with aiosqlite.connect(settings.DATABASE_PATH) as db:
+        result = await db.execute(
+            "UPDATE confirmations SET status = 'confirmed' WHERE id = ? AND status = 'pending'",
+            (conf_id,),
+        )
+        await db.commit()
+        return result.rowcount == 1
+
+
+async def save_confirmation_token(conf_id: str, token: str) -> bool:
+    """Stores the minted JWS token for the confirmed record."""
+    async with aiosqlite.connect(settings.DATABASE_PATH) as db:
+        result = await db.execute(
+            "UPDATE confirmations SET token = ? WHERE id = ?",
+            (token, conf_id),
+        )
+        await db.commit()
+        return result.rowcount > 0
 
 
 async def update_confirmation_status(

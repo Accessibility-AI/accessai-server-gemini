@@ -1,5 +1,6 @@
 import json
 import re
+import uuid
 from typing import Any
 
 from app.api.schemas import InterpretResponse
@@ -16,10 +17,26 @@ from app.templates.speech import (
 RE_10_PLUS_DIGITS = re.compile(r"\d{10,}")
 RE_VALUE_ATTR = re.compile(r'"value"\s*:\s*"(?!\[value\])[^"]+"', re.IGNORECASE)
 
+CONTROL_COMMANDS = {
+    "cancel": "cancel",
+    "stop": "stop",
+    "repeat": "repeat",
+    "next": "next",
+    "previous": "previous",
+    "back": "previous",
+    "help": "help",
+    "describe screen": "describe_screen",
+    "describe_screen": "describe_screen",
+    "what's on my screen": "describe_screen",
+    "what is on screen": "describe_screen",
+}
+
 
 def _contains_10_plus_digits(obj: Any) -> bool:
     if isinstance(obj, str):
-        return bool(RE_10_PLUS_DIGITS.search(obj))
+        # Allow filtered placeholders like [number removed]
+        clean_str = re.sub(r"\[number removed\]", "", obj, flags=re.IGNORECASE)
+        return bool(RE_10_PLUS_DIGITS.search(clean_str))
     if isinstance(obj, dict):
         return any(_contains_10_plus_digits(v) for v in obj.values())
     if isinstance(obj, list):
@@ -93,12 +110,14 @@ class InterpreterService:
 
     def _build_response(
         self,
-        type: str,
+        outcome: str,
         confidence: float,
-        spoken_prompt: str,
-        intent: str | None = None,
+        action_id: str | None = None,
         params: dict[str, Any] | None = None,
-        clarification_reason: str | None = None,
+        missing_params: list[str] | None = None,
+        control: str | None = None,
+        message: str | None = None,
+        spoken_prompt: str | None = None,
         language: str = "en",
     ) -> InterpretResponse:
         provider_name = settings.LLM_PROVIDER
@@ -107,13 +126,26 @@ class InterpreterService:
             f"Processed by {provider_name} ({region}) pursuant to "
             f"Nigeria Data Protection Act 2023 (NDPA) cross-border guidelines."
         )
+        req_id = f"r_{uuid.uuid4().hex[:12]}"
+        safe_params = params or {}
+        safe_missing = missing_params or []
+        prompt = spoken_prompt or message or ""
+
+        # Map outcome to legacy type
+        legacy_type = "action" if outcome == "action" else "clarification"
+
         return InterpretResponse(
-            type=type,
-            intent=intent,
-            params=params,
+            request_id=req_id,
+            outcome=outcome,
+            action_id=action_id,
+            params=safe_params,
+            missing_params=safe_missing,
+            control=control,
+            message=message,
             confidence=confidence,
-            spoken_prompt=spoken_prompt,
-            clarification_reason=clarification_reason,
+            type=legacy_type,
+            intent=action_id,
+            spoken_prompt=prompt,
             language=language,
             provider=provider_name,
             processing_region=region,
@@ -128,10 +160,9 @@ class InterpreterService:
         screen: Any = None,
         dialog_state: dict[str, Any] | None = None,
     ) -> InterpretResponse:
-        """Interprets a user utterance against the allowed action manifest across 8 languages.
+        """Interprets a user utterance against the allowed actions list across 8 languages.
 
-        Supports English, Broken English (Pidgin), Yoruba, Igbo, Hausa, French, German, and Spanish.
-        Enforces v1.1 defence in depth and deterministic amount parsing.
+        Conforms strictly to SDK 0.2.0 / Contract v1.1.
         Never guesses on money or recipients.
         """
         # Validate defence-in-depth rules
@@ -144,10 +175,56 @@ class InterpreterService:
         if not is_valid:
             raise ValueError(reason)
 
+        clean_text = utterance.strip().lower()
+
+        # Check for control commands (cancel, stop, repeat, next, previous, help, describe_screen)
+        # Note: Do not return "confirm" as a control. Confirmation never goes through the model.
+        if clean_text in CONTROL_COMMANDS:
+            ctrl = CONTROL_COMMANDS[clean_text]
+            return self._build_response(
+                outcome="control",
+                confidence=1.0,
+                control=ctrl,
+                message=f"Command {ctrl} received.",
+            )
+
         # Detect utterance language
         lang = detect_language(utterance)
 
-        # Ensure sanitized context: Never pass balances, beneficiary lists, passwords, or system messages
+        # Build action maps
+        actions_by_id = {}
+        actions_by_name = {}
+        for action in manifest:
+            aid = action.get("id") or action.get("name")
+            aname = action.get("name") or aid
+            if aid:
+                actions_by_id[aid] = action
+            if aname:
+                actions_by_name[aname] = action
+
+        # Handle dialog continuation if pending_action_id is set
+        if dialog_state and dialog_state.get("pending_action_id"):
+            pending_id = dialog_state["pending_action_id"]
+            if pending_id in actions_by_id:
+                filled = dialog_state.get("filled_params") or {}
+                # Check if this utterance supplies an amount
+                parsed_kobo = parse_amount_to_kobo(utterance)
+                if parsed_kobo is not None and parsed_kobo > 0:
+                    merged_params = dict(filled)
+                    merged_params["amount_minor"] = parsed_kobo
+                    merged_params["amount_kobo"] = parsed_kobo
+                    recipient = merged_params.get("recipient")
+                    spoken = build_transfer_confirmation_prompt(parsed_kobo, recipient or "", lang=lang) if recipient else None
+                    return self._build_response(
+                        outcome="action",
+                        action_id=pending_id,
+                        params=merged_params,
+                        confidence=0.95,
+                        spoken_prompt=spoken,
+                        language=lang,
+                    )
+
+        # Sanitize dialog context: Never pass balances, beneficiary lists, passwords, or system messages
         sanitized_dialog_state = None
         if dialog_state:
             sanitized_dialog_state = {
@@ -181,37 +258,35 @@ class InterpreterService:
             dialog_state=sanitized_dialog_state,
         )
 
-        manifest_map = {item["name"]: item for item in manifest}
-
         # 1. Check confidence threshold
         if llm_result.confidence < settings.CONFIDENCE_THRESHOLD:
-            prompt = build_clarification_prompt("low_confidence", lang=lang)
+            msg = build_clarification_prompt("low_confidence", lang=lang)
             return self._build_response(
-                type="clarification",
+                outcome="clarify",
                 confidence=llm_result.confidence,
-                spoken_prompt=prompt,
-                clarification_reason="low_confidence",
+                message=msg,
+                spoken_prompt=msg,
                 language=lang,
             )
 
         # 2. Check tool call count
         if len(llm_result.tool_calls) == 0:
-            prompt = build_clarification_prompt("unknown_tool", lang=lang)
+            msg = build_clarification_prompt("unknown_tool", lang=lang)
             return self._build_response(
-                type="clarification",
+                outcome="unsupported",
                 confidence=llm_result.confidence,
-                spoken_prompt=prompt,
-                clarification_reason="unknown_tool",
+                message=msg,
+                spoken_prompt=msg,
                 language=lang,
             )
 
         if len(llm_result.tool_calls) > 1:
-            prompt = build_clarification_prompt("multiple_tools", lang=lang)
+            msg = build_clarification_prompt("multiple_tools", lang=lang)
             return self._build_response(
-                type="clarification",
+                outcome="clarify",
                 confidence=llm_result.confidence,
-                spoken_prompt=prompt,
-                clarification_reason="multiple_tools",
+                message=msg,
+                spoken_prompt=msg,
                 language=lang,
             )
 
@@ -219,88 +294,102 @@ class InterpreterService:
         tool_name = tool_call.name
         tool_args = tool_call.arguments or {}
 
-        # 3. Check if tool is allowed in manifest
-        if tool_name not in manifest_map:
-            prompt = build_clarification_prompt("unknown_tool", lang=lang)
+        # 3. Check if tool is allowed in actions
+        action_match = actions_by_id.get(tool_name) or actions_by_name.get(tool_name)
+        if not action_match:
+            msg = build_clarification_prompt("unknown_tool", lang=lang)
             return self._build_response(
-                type="clarification",
+                outcome="unsupported",
                 confidence=llm_result.confidence,
-                spoken_prompt=prompt,
-                clarification_reason="unknown_tool",
+                message=msg,
+                spoken_prompt=msg,
                 language=lang,
             )
 
+        canonical_action_id = action_match.get("id") or action_match.get("name")
+
         # 4. Handle money transfer validation
-        if tool_name == "transfer_money":
+        if canonical_action_id == "transfer_money":
             recipient = tool_args.get("recipient")
             if recipient:
                 recipient = str(recipient).strip()
                 # Reject placeholders
                 if recipient.lower() in [
-                    "someone",
-                    "person",
-                    "recipient",
-                    "anybody",
-                    "user",
-                    "none",
-                    "quelqu'un",
-                    "jemand",
-                    "alguien",
+                    "someone", "person", "recipient", "anybody", "user",
+                    "none", "quelqu'un", "jemand", "alguien",
                 ]:
                     recipient = None
 
             amount_raw = tool_args.get("amount_raw")
+            amount_minor_in = tool_args.get("amount_minor")
             if amount_raw:
                 amount_raw = str(amount_raw).strip()
 
             # Check missing parameters
-            if not recipient and not amount_raw:
-                prompt = build_clarification_prompt(
-                    "missing_amount_and_recipient", lang=lang
-                )
+            if not recipient and not amount_raw and not amount_minor_in:
+                msg = build_clarification_prompt("missing_amount_and_recipient", lang=lang)
                 return self._build_response(
-                    type="clarification",
-                    intent=tool_name,
+                    outcome="clarify",
+                    action_id=canonical_action_id,
+                    missing_params=["recipient", "amount_minor"],
                     confidence=llm_result.confidence,
-                    spoken_prompt=prompt,
-                    clarification_reason="missing_amount_and_recipient",
+                    message=msg,
+                    spoken_prompt=msg,
                     language=lang,
                 )
 
             if not recipient:
-                prompt = build_clarification_prompt("missing_recipient", lang=lang)
+                msg = build_clarification_prompt("missing_recipient", lang=lang)
+                params_heard = {}
+                if amount_raw:
+                    kobo_val = parse_amount_to_kobo(amount_raw)
+                    if kobo_val is not None:
+                        params_heard["amount_minor"] = kobo_val
+                        params_heard["amount_kobo"] = kobo_val
                 return self._build_response(
-                    type="clarification",
-                    intent=tool_name,
+                    outcome="clarify",
+                    action_id=canonical_action_id,
+                    params=params_heard,
+                    missing_params=["recipient"],
                     confidence=llm_result.confidence,
-                    spoken_prompt=prompt,
-                    clarification_reason="missing_recipient",
+                    message=msg,
+                    spoken_prompt=msg,
                     language=lang,
                 )
 
-            if not amount_raw:
-                prompt = build_clarification_prompt(
-                    "missing_amount", recipient=recipient, lang=lang
-                )
+            if not amount_raw and not amount_minor_in:
+                msg = build_clarification_prompt("missing_amount", recipient=recipient, lang=lang)
                 return self._build_response(
-                    type="clarification",
-                    intent=tool_name,
+                    outcome="clarify",
+                    action_id=canonical_action_id,
+                    params={"recipient": recipient},
+                    missing_params=["amount_minor"],
                     confidence=llm_result.confidence,
-                    spoken_prompt=prompt,
-                    clarification_reason="missing_amount",
+                    message=msg,
+                    spoken_prompt=msg,
                     language=lang,
                 )
 
             # Deterministic parsing to kobo
-            amount_kobo = parse_amount_to_kobo(amount_raw)
+            amount_kobo = None
+            if amount_raw:
+                amount_kobo = parse_amount_to_kobo(amount_raw)
+            elif amount_minor_in is not None:
+                try:
+                    amount_kobo = int(amount_minor_in)
+                except (ValueError, TypeError):
+                    amount_kobo = None
+
             if amount_kobo is None or amount_kobo <= 0:
-                prompt = build_clarification_prompt("unparseable_amount", lang=lang)
+                msg = build_clarification_prompt("unparseable_amount", lang=lang)
                 return self._build_response(
-                    type="clarification",
-                    intent=tool_name,
+                    outcome="clarify",
+                    action_id=canonical_action_id,
+                    params={"recipient": recipient},
+                    missing_params=["amount_minor"],
                     confidence=llm_result.confidence,
-                    spoken_prompt=prompt,
-                    clarification_reason="unparseable_amount",
+                    message=msg,
+                    spoken_prompt=msg,
                     language=lang,
                 )
 
@@ -310,55 +399,50 @@ class InterpreterService:
                 try:
                     llm_num = float(llm_estimate)
                     if not verify_amount_agreement(amount_kobo, llm_num):
-                        prompt = build_clarification_prompt(
-                            "amount_mismatch", lang=lang
-                        )
+                        msg = build_clarification_prompt("amount_mismatch", lang=lang)
                         return self._build_response(
-                            type="clarification",
-                            intent=tool_name,
+                            outcome="clarify",
+                            action_id=canonical_action_id,
+                            params={"recipient": recipient},
+                            missing_params=["amount_minor"],
                             confidence=llm_result.confidence,
-                            spoken_prompt=prompt,
-                            clarification_reason="amount_mismatch",
+                            message=msg,
+                            spoken_prompt=msg,
                             language=lang,
                         )
                 except (ValueError, TypeError):
-                    prompt = build_clarification_prompt("amount_mismatch", lang=lang)
-                    return self._build_response(
-                        type="clarification",
-                        intent=tool_name,
-                        confidence=llm_result.confidence,
-                        spoken_prompt=prompt,
-                        clarification_reason="amount_mismatch",
-                        language=lang,
-                    )
+                    pass
 
-            # Parameters are verified with zero guessing
+            # Valid parameters with amount_minor as JSON integer in kobo
             verified_params = {
                 "recipient": recipient,
-                "amount_raw": amount_raw,
+                "amount_minor": amount_kobo,
+                # Backward-compatibility alias
                 "amount_kobo": amount_kobo,
             }
-            # Spoken prompt strictly generated from template (never from LLM)
+            # Spoken prompt strictly generated from static template (never from LLM)
             spoken_text = build_transfer_confirmation_prompt(
                 amount_kobo, recipient, lang=lang
             )
 
             return self._build_response(
-                type="action",
-                intent=tool_name,
+                outcome="action",
+                action_id=canonical_action_id,
                 params=verified_params,
+                missing_params=[],
                 confidence=llm_result.confidence,
                 spoken_prompt=spoken_text,
                 language=lang,
             )
 
         # 5. Handle get_balance
-        elif tool_name == "get_balance":
+        elif canonical_action_id == "get_balance":
             spoken_text = build_balance_prompt(lang=lang)
             return self._build_response(
-                type="action",
-                intent=tool_name,
+                outcome="action",
+                action_id=canonical_action_id,
                 params={},
+                missing_params=[],
                 confidence=llm_result.confidence,
                 spoken_prompt=spoken_text,
                 language=lang,
@@ -367,10 +451,11 @@ class InterpreterService:
         # 6. Other generic manifest actions
         else:
             return self._build_response(
-                type="action",
-                intent=tool_name,
+                outcome="action",
+                action_id=canonical_action_id,
                 params=tool_args,
+                missing_params=[],
                 confidence=llm_result.confidence,
-                spoken_prompt=f"Performing {tool_name.replace('_', ' ')}.",
+                spoken_prompt=f"Performing {canonical_action_id.replace('_', ' ')}.",
                 language=lang,
             )

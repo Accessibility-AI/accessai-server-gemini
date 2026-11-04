@@ -25,7 +25,7 @@ CRITICAL RULES:
    - Spanish (e.g. "Por favor envía 5k a David", "¿cuál es mi saldo?")
 2. For transfer amounts:
    - Extract the EXACT raw text spoken by the user into 'amount_raw' (e.g. "5k", "five thousand naira", "ẹgbẹrún márùn-ún", "puku ise", "dubu biyar", "cinq mille", "fünftausend", "cinco mil", "20 grand", "1.5m", "N5000").
-   - If you can determine the numeric value in Naira, provide it in 'amount_numeric_estimate' (e.g. 5000 for 5k). If unsure, leave it null.
+   - If you can determine the numeric value in Naira, provide it in 'amount_numeric_estimate' (e.g. 5000 for 5k) or integer kobo in 'amount_minor'.
    - NEVER invent or guess an amount. If the user did not say an amount, do NOT guess.
 3. For recipient:
    - Extract ONLY the explicitly spoken recipient name into 'recipient' (e.g. "David", "Mama", "Chinedu", "Sarah").
@@ -41,6 +41,26 @@ GEMINI_TYPE_MAP = {
     "array": "ARRAY",
     "object": "OBJECT",
 }
+
+_SHARED_CLIENT: httpx.AsyncClient | None = None
+
+
+def get_shared_client() -> httpx.AsyncClient:
+    """Reuses a shared httpx.AsyncClient with keep-alive connections and 7.0s timeout."""
+    global _SHARED_CLIENT
+    if _SHARED_CLIENT is None or _SHARED_CLIENT.is_closed:
+        _SHARED_CLIENT = httpx.AsyncClient(
+            timeout=7.0,
+            limits=httpx.Limits(max_keepalive_connections=20, max_connections=50),
+        )
+    return _SHARED_CLIENT
+
+
+async def close_shared_client():
+    global _SHARED_CLIENT
+    if _SHARED_CLIENT is not None and not _SHARED_CLIENT.is_closed:
+        await _SHARED_CLIENT.aclose()
+        _SHARED_CLIENT = None
 
 
 def sanitize_schema_for_gemini(schema: dict[str, Any]) -> dict[str, Any]:
@@ -73,10 +93,68 @@ def sanitize_schema_for_gemini(schema: dict[str, Any]) -> dict[str, Any]:
     return cleaned
 
 
+def action_to_gemini_declaration(action: dict[str, Any]) -> dict[str, Any]:
+    """Converts either OpenAPI format or contract v1.1 format into Gemini function declaration."""
+    fn_name = action.get("id") or action.get("name") or "action"
+    description = action.get("description", "")
+
+    if "parameters" in action and isinstance(action["parameters"], dict):
+        params_schema = sanitize_schema_for_gemini(action["parameters"])
+    elif "params" in action and isinstance(action["params"], list):
+        properties = {}
+        required = []
+        for p in action["params"]:
+            p_name = p.get("name", "")
+            p_type = p.get("type", "string")
+            p_desc = p.get("description", "")
+            if p.get("required"):
+                required.append(p_name)
+
+            if p_type in ("amount_minor", "integer", "int"):
+                g_type = "INTEGER"
+            elif p_type in ("number", "float"):
+                g_type = "NUMBER"
+            elif p_type == "boolean":
+                g_type = "BOOLEAN"
+            else:
+                g_type = "STRING"
+
+            properties[p_name] = {
+                "type": g_type,
+                "description": p_desc or f"Parameter {p_name}",
+            }
+
+        # For transfer actions, also accept amount_raw to assist with deterministic speech parsing
+        if "amount_minor" in properties and "amount_raw" not in properties:
+            properties["amount_raw"] = {
+                "type": "STRING",
+                "description": "Raw spoken amount phrase (e.g. '5k', 'five thousand naira')",
+            }
+
+        params_schema = {
+            "type": "OBJECT",
+            "properties": properties,
+            "required": required,
+        }
+    else:
+        params_schema = {"type": "OBJECT", "properties": {}}
+
+    return {
+        "name": fn_name,
+        "description": description,
+        "parameters": params_schema,
+    }
+
+
 class GeminiProvider(BaseLLMProvider):
     """Google Gemini LLM Provider implementing tool calling and intent interpretation."""
 
-    def __init__(self, api_key: str | None = None, model: str | None = None):
+    def __init__(
+        self,
+        api_key: str | None = None,
+        model: str | None = None,
+        client: httpx.AsyncClient | None = None,
+    ):
         if api_key is not None:
             self.api_key = api_key
         else:
@@ -90,6 +168,7 @@ class GeminiProvider(BaseLLMProvider):
         self.api_url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
         )
+        self._custom_client = client
 
     async def interpret(
         self,
@@ -104,16 +183,9 @@ class GeminiProvider(BaseLLMProvider):
             )
 
         # 1. Convert manifest to Gemini function declarations
-        function_declarations = []
-        for action in manifest:
-            params = action.get("parameters", {"type": "object", "properties": {}})
-            function_declarations.append(
-                {
-                    "name": action["name"],
-                    "description": action.get("description", ""),
-                    "parameters": sanitize_schema_for_gemini(params),
-                }
-            )
+        function_declarations = [
+            action_to_gemini_declaration(action) for action in manifest
+        ]
 
         # 2. Build user context
         user_context_parts = [f"Utterance: {utterance}"]
@@ -151,36 +223,41 @@ class GeminiProvider(BaseLLMProvider):
             "x-goog-api-key": self.api_key,
         }
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        client = self._custom_client or get_shared_client()
+        try:
+            response = await client.post(
+                self.api_url,
+                headers=headers,
+                json=payload,
+            )
+            response.raise_for_status()
+            data = response.json()
+        except httpx.HTTPStatusError as e:
+            error_detail = ""
             try:
-                response = await client.post(
-                    self.api_url,
-                    headers=headers,
-                    json=payload,
-                )
-                response.raise_for_status()
-                data = response.json()
-            except httpx.HTTPStatusError as e:
-                error_detail = ""
-                try:
-                    error_detail = e.response.text
-                except Exception:
-                    pass
-                logger.error(f"Gemini API error ({e.response.status_code}): {error_detail}")
-                raise RuntimeError(
-                    f"Gemini API request failed with status {e.response.status_code}: {error_detail}"
-                ) from e
-            except httpx.RequestError as e:
-                logger.error(f"Gemini connection error: {e}")
-                raise RuntimeError(f"Failed to connect to Google Gemini API: {e}") from e
+                error_detail = e.response.text
+            except Exception:
+                pass
+            logger.error(f"Gemini API error ({e.response.status_code}): {error_detail}")
+            raise RuntimeError(
+                f"Gemini API request failed with status {e.response.status_code}: {error_detail}"
+            ) from e
+        except httpx.TimeoutException as e:
+            logger.error(f"Gemini API request timed out: {e}")
+            raise TimeoutError("Gemini API request timed out after 7.0 seconds") from e
+        except httpx.RequestError as e:
+            logger.error(f"Gemini connection error: {e}")
+            raise RuntimeError(f"Failed to connect to Google Gemini API: {e}") from e
 
         # 4. Extract candidate parts
         tool_calls_out: list[ToolCall] = []
         text_content = ""
 
         candidates = data.get("candidates", [])
+        finish_reason = "STOP"
         if candidates:
             first_candidate = candidates[0]
+            finish_reason = first_candidate.get("finishReason", "STOP")
             content = first_candidate.get("content", {})
             parts = content.get("parts", [])
 
@@ -199,8 +276,21 @@ class GeminiProvider(BaseLLMProvider):
                 elif "text" in part:
                     text_content += part.get("text", "")
 
-        # Gemini outputs high quality structured function calls.
-        confidence = 0.96 if tool_calls_out else 0.5
+        # Compute dynamic confidence based on model response quality
+        if not tool_calls_out:
+            confidence = 0.35
+        elif finish_reason != "STOP":
+            confidence = 0.45
+        else:
+            args = tool_calls_out[0].arguments or {}
+            if not args:
+                confidence = 0.65
+            elif "recipient" in args and not args.get("recipient"):
+                confidence = 0.70
+            elif "amount_raw" in args and not args.get("amount_raw"):
+                confidence = 0.70
+            else:
+                confidence = 0.95
 
         return LLMInterpretationResult(
             tool_calls=tool_calls_out,

@@ -5,16 +5,29 @@ from app.providers.gemini_provider import GeminiProvider
 from app.providers.groq_provider import GroqProvider
 from app.providers.mock_provider import MockLLMProvider
 
+_PROVIDER_CACHE: dict[str, BaseLLMProvider] = {}
+
 
 def get_llm_provider(name: str | None = None) -> BaseLLMProvider:
     provider_name = (name or settings.LLM_PROVIDER).lower()
+    if provider_name in _PROVIDER_CACHE:
+        return _PROVIDER_CACHE[provider_name]
+
     if provider_name == "gemini":
-        return GeminiProvider()
+        provider = GeminiProvider()
     elif provider_name == "groq":
-        return GroqProvider()
+        provider = GroqProvider()
     elif provider_name == "anthropic":
-        return AnthropicProvider()
+        provider = AnthropicProvider()
     elif provider_name == "mock":
-        return MockLLMProvider()
+        provider = MockLLMProvider()
     else:
         raise ValueError(f"Unknown LLM provider: {provider_name}")
+
+    _PROVIDER_CACHE[provider_name] = provider
+    return provider
+
+
+def clear_provider_cache():
+    """Clears cached providers, useful for testing configuration changes."""
+    _PROVIDER_CACHE.clear()

@@ -26,13 +26,14 @@ class SessionCreateRequest(BaseModel):
 
 class SessionResponse(BaseModel):
     session_id: str
-    status: str
+    expires_at: str
+    status: str = "active"
     app_id: str | None = None
     locale: str | None = None
     device_key: DeviceKey | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
-    created_at: int
-    updated_at: int
+    created_at: int | None = None
+    updated_at: int | None = None
 
 
 class ManifestParameterProperty(BaseModel):
@@ -48,22 +49,31 @@ class ManifestAction(BaseModel):
 
 class InterpretRequest(BaseModel):
     session_id: str
-    utterance: str
-    manifest: list[dict[str, Any]] = Field(
-        ..., description="Allowed actions exposed by the host Android app"
-    )
+    text: str | None = None
+    utterance: str | None = None
+    actions: list[dict[str, Any]] | None = None
+    manifest: list[dict[str, Any]] | None = None
     screen_descriptor: str | None = None
-    screen: dict[str, Any] | list[Any] | str | None = None
+    screen: Any = None
+    dialog: dict[str, Any] | None = None
     dialog_state: dict[str, Any] | None = None
+    locale: str | None = None
 
 
 class InterpretResponse(BaseModel):
-    type: str  # "action" or "clarification"
-    intent: str | None = None
-    params: dict[str, Any] | None = None
+    request_id: str
+    outcome: str = "action"  # "action" | "clarify" | "unsupported" | "control"
+    action_id: str | None = None  # MUST be one of request.actions[].id
+    params: dict[str, Any] = Field(default_factory=dict)
+    missing_params: list[str] = Field(default_factory=list)
+    control: str | None = None  # cancel | stop | repeat | next | previous | help | describe_screen
+    message: str | None = None  # for clarify/unsupported
     confidence: float
-    spoken_prompt: str
-    clarification_reason: str | None = None
+
+    # Backward compatibility fields
+    type: str | None = None
+    intent: str | None = None
+    spoken_prompt: str | None = None
     language: str = "en"
     provider: str | None = None
     processing_region: str | None = None
@@ -72,18 +82,23 @@ class InterpretResponse(BaseModel):
 
 class PendingConfirmationRequest(BaseModel):
     session_id: str
-    action: str
+    action_id: str | None = None
+    action: str | None = None
     params: dict[str, Any]
 
 
 class PendingConfirmationResponse(BaseModel):
-    confirmation_id: str
-    session_id: str
-    action: str
-    params: dict[str, Any]
-    status: str
-    spoken_prompt: str
-    expires_at: int
+    pending_id: str
+    params_sha256: str
+    expires_at: str
+
+    # Backward compatibility fields
+    confirmation_id: str | None = None
+    session_id: str | None = None
+    action: str | None = None
+    params: dict[str, Any] | None = None
+    status: str = "pending"
+    spoken_prompt: str | None = None
 
 
 class DeviceAuth(BaseModel):
@@ -110,13 +125,17 @@ class ConfirmRequest(BaseModel):
 
 class ConfirmResponse(BaseModel):
     status: str
-    confirmation_id: str
     token: str
-    expires_at: int
-    spoken_prompt: str
+    nonce: str
+    expires_at: str
+
+    # Backward compatibility fields
+    confirmation_id: str | None = None
+    spoken_prompt: str | None = None
 
 
 class CancelRequest(BaseModel):
+    session_id: str | None = None
     reason: str | None = "user_cancelled"
 
 

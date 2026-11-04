@@ -1,7 +1,9 @@
 import base64
 import hashlib
 import json
+import os
 import time
+from pathlib import Path
 from typing import Any
 
 from cryptography.hazmat.primitives import serialization
@@ -10,10 +12,12 @@ from jwcrypto import jwk, jws
 
 from app.config import settings
 
+KEY_FILE_PATH = Path(".ed25519_key")
+
 
 def canonical_json(data: Any) -> str:
-    """Returns deterministic canonical JSON string with sorted keys and no whitespace."""
-    return json.dumps(data, sort_keys=True, separators=(",", ":"))
+    """Returns deterministic canonical JSON string with sorted keys, ensure_ascii=False, and no whitespace."""
+    return json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
 def hash_params(params: dict[str, Any]) -> str:
@@ -33,9 +37,34 @@ class JWSSigner:
         if private_key_b64:
             raw_bytes = base64.b64decode(private_key_b64)
             self._private_key = ed25519.Ed25519PrivateKey.from_private_bytes(raw_bytes)
+        elif settings.APP_ENV == "production" and not os.environ.get("PYTEST_CURRENT_TEST"):
+            raise RuntimeError(
+                "ED25519_PRIVATE_KEY_B64 must be set in production to ensure host backends can verify tokens across deploys and restarts."
+            )
+        elif KEY_FILE_PATH.exists():
+            try:
+                raw_bytes = base64.b64decode(KEY_FILE_PATH.read_text().strip())
+                self._private_key = ed25519.Ed25519PrivateKey.from_private_bytes(raw_bytes)
+            except Exception:
+                self._private_key = ed25519.Ed25519PrivateKey.generate()
+                priv_raw = self._private_key.private_bytes(
+                    encoding=serialization.Encoding.Raw,
+                    format=serialization.PrivateFormat.Raw,
+                    encryption_algorithm=serialization.NoEncryption(),
+                )
+                KEY_FILE_PATH.write_text(base64.b64encode(priv_raw).decode("ascii"))
         else:
-            # Generate a fresh key pair
+            # Generate a fresh key pair and persist for dev/test restarts
             self._private_key = ed25519.Ed25519PrivateKey.generate()
+            try:
+                priv_raw = self._private_key.private_bytes(
+                    encoding=serialization.Encoding.Raw,
+                    format=serialization.PrivateFormat.Raw,
+                    encryption_algorithm=serialization.NoEncryption(),
+                )
+                KEY_FILE_PATH.write_text(base64.b64encode(priv_raw).decode("ascii"))
+            except Exception:
+                pass
 
         self._public_key = self._private_key.public_key()
 
@@ -87,32 +116,35 @@ class JWSSigner:
         now_ts: int | None = None,
         amr: list[str] | None = None,
     ) -> tuple[str, dict[str, Any]]:
-        """Mints a short-lived signed JWS token bound to:
+        """Mints a short-lived signed JWS token conforming to contract v1.1.
 
-        - action
-        - params_hash (SHA-256 of canonical params)
-        - session_id
-        - single-use nonce
-        - amr (authentication method reference for device audit trail, e.g. ["biometric"])
-        - exp & iat
+        Claims:
+        - iss: "accessai"
+        - sub: session_id
+        - aid: action id
+        - ph: SHA-256 of canonical params (ensure_ascii=False)
+        - jti: single-use nonce
+        - amr: optional authentication method reference (e.g. ["biometric"])
+        - exp & iat: timestamps (<= 60s)
+        NOTE: Raw parameters (recipient, amount) are NOT included in claims for privacy.
         """
         current_time = int(time.time()) if now_ts is None else now_ts
         expires_at = current_time + ttl_seconds
+        ph = hash_params(params)
 
-        payload_dict = {
-            "iss": "voice-intent-service",
+        payload_dict: dict[str, Any] = {
+            "iss": "accessai",
             "sub": session_id,
-            "action": action,
-            "params_hash": hash_params(params),
-            "params": params,
-            "nonce": nonce,
+            "aid": action,
+            "ph": ph,
+            "jti": nonce,
             "iat": current_time,
             "exp": expires_at,
         }
         if amr:
             payload_dict["amr"] = amr
 
-        token = jws.JWS(json.dumps(payload_dict))
+        token = jws.JWS(json.dumps(payload_dict, ensure_ascii=False))
         token.add_signature(
             self.jwk_key,
             alg="EdDSA",
