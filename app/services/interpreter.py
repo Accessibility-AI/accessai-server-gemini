@@ -11,6 +11,7 @@ from app.providers.base import BaseLLMProvider
 from app.templates.speech import (
     build_balance_prompt,
     build_clarification_prompt,
+    build_transactions_prompt,
     build_transfer_confirmation_prompt,
 )
 
@@ -459,7 +460,20 @@ class InterpreterService:
                 language=lang,
             )
 
-        # 6. Other generic manifest actions
+        # 6. Handle get_transactions / history
+        elif canonical_action_id in ("get_transactions", "get_transaction_history"):
+            spoken_text = build_transactions_prompt(lang=lang)
+            return self._build_response(
+                outcome="action",
+                action_id=canonical_action_id,
+                params={},
+                missing_params=[],
+                confidence=llm_result.confidence,
+                spoken_prompt=spoken_text,
+                language=lang,
+            )
+
+        # 7. Other generic manifest actions
         else:
             return self._build_response(
                 outcome="action",

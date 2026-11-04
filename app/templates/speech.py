@@ -192,3 +192,45 @@ def build_cancelled_prompt(lang: str = "en") -> str:
         "es": "Transacción cancelada.",
     }
     return prompts.get(lang, prompts["en"])
+
+
+def build_transactions_prompt(lang: str = "en") -> str:
+    prompts = {
+        "en": "Fetching your transaction history. Recent transfers: 5,000 Naira to David yesterday, 10,000 Naira received from Amaka.",
+        "pcm": "Fetching your transaction history. Recent transfers: 5,000 Naira give David yesterday, 10,000 Naira from Amaka.",
+        "yo": "N wa itan awọn iṣowo rẹ. Awọn iṣowo to kẹhin: 5,000 Naira si David lana, 10,000 Naira lati ọwọ Amaka.",
+        "ig": "Na-enyocha akụkọ azụmahịa gị. Azụmahịa na nso nso a: 5,000 Naira nye David ụnyaahụ, 10,000 Naira sitere na Amaka.",
+        "ha": "Ana binciko tarihin ma'amalolinku. Canje-canjen baya-bayan nan: Naira 5,000 zuwa ga David jiya, Naira 10,000 daga Amaka.",
+        "fr": "Récupération de votre historique de transactions. Derniers virements : 5 000 Nairas à David hier, 10 000 Nairas reçus d'Amaka.",
+        "de": "Transaktionsverlauf wird abgerufen. Letzte Überweisungen: 5.000 Naira an David gestern, 10.000 Naira von Amaka erhalten.",
+        "es": "Consultando su historial de transacciones. Transferencias recientes: 5.000 Nairas a David ayer, 10.000 Nairas recibidas de Amaka.",
+    }
+    return prompts.get(lang, prompts["en"])
+
+
+def build_casual_rejection_prompt(lang: str = "en") -> str:
+    prompts = {
+        "en": "Casual phrases like yes are rejected for security. Please say 'confirm' to execute.",
+        "pcm": "Casual words like yes no dey work for here. Abeg say 'confirm' make we proceed.",
+        "yo": "Ọrọ bii bẹẹni ko to fun aabo. Ẹ jọọ ẹ sọ 'mo fọwọsi' tabi 'confirm' lati jẹrisi.",
+        "ig": "Okwu dị ka ee ezughị maka nchekwa. Biko kwuo 'akwadom' ma ọ bụ 'confirm'.",
+        "ha": "Kalmomi kamar eh ba a yarda da su ba don tsaro. Da fatan za a ce 'tabbatar' ko 'confirm'.",
+        "fr": "Les phrases informelles comme oui sont rejetées pour des raisons de sécurité. Veuillez dire 'confirmer'.",
+        "de": "Beiläufige Phrasen wie Ja werden aus Sicherheitsgründen abgelehnt. Bitte sagen Sie 'bestätigen'.",
+        "es": "Las frases informales como sí se rechazan por seguridad. Por favor diga 'confirmar'.",
+    }
+    return prompts.get(lang, prompts["en"])
+
+
+def build_replay_blocked_prompt(lang: str = "en") -> str:
+    prompts = {
+        "en": "This confirmation has already been used and cannot be replayed.",
+        "pcm": "This confirmation don already be used. You no fit reuse am.",
+        "yo": "A ti lo aami ifọwọsi yii tẹlẹ. Ko le tun lo.",
+        "ig": "Ejirila akara ngosi nkwenye a mee ihe mbụ. Enweghị ike iji ya ọzọ.",
+        "ha": "An riga an yi amfani da wannan shaidar. Ba za a iya sake amfani da ita ba.",
+        "fr": "Cette confirmation a déjà été utilisée et ne peut pas être rejouée.",
+        "de": "Diese Bestätigung wurde bereits verwendet und kann nicht wiederholt werden.",
+        "es": "Esta confirmación ya ha sido utilizada y no se puede repetir.",
+    }
+    return prompts.get(lang, prompts["en"])
