@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response
@@ -42,7 +42,7 @@ async def create_new_session(req: SessionCreateRequest):
         locale=req.locale,
     )
     expires_at_iso = datetime.fromtimestamp(
-        sess["created_at"] + 86400, timezone.utc
+        sess["created_at"] + 86400, UTC
     ).strftime("%Y-%m-%dT%H:%M:%SZ")
     sess["expires_at"] = expires_at_iso
     return sess
@@ -108,7 +108,7 @@ async def interpret_utterance(
             status_code=504,
             content={"error": {"code": "server", "message": str(e)}},
         )
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         err_msg = str(e)
         if "API key not configured" in err_msg:
             return JSONResponse(

@@ -28,6 +28,10 @@ ENV/
 .pytest_cache/
 .coverage
 htmlcov/
+pytest-results.xml
+
+# Ruff
+.ruff_cache/
 
 # IDE & OS
 .idea/

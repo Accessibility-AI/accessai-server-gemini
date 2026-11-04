@@ -85,7 +85,7 @@ async def run_evals(provider_name: str = "mock", limit: int | None = None) -> bo
             )
             elapsed_ms = (time.perf_counter() - start_t) * 1000.0
             latencies_ms.append(elapsed_ms)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             elapsed_ms = (time.perf_counter() - start_t) * 1000.0
             latencies_ms.append(elapsed_ms)
             print(f"[{i+1}/{total}] ERROR on '{utterance}': {e}")

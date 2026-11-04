@@ -233,11 +233,7 @@ class GeminiProvider(BaseLLMProvider):
             response.raise_for_status()
             data = response.json()
         except httpx.HTTPStatusError as e:
-            error_detail = ""
-            try:
-                error_detail = e.response.text
-            except Exception:
-                pass
+            error_detail = getattr(e.response, "text", "")
             logger.error(f"Gemini API error ({e.response.status_code}): {error_detail}")
             raise RuntimeError(
                 f"Gemini API request failed with status {e.response.status_code}: {error_detail}"
@@ -270,7 +266,7 @@ class GeminiProvider(BaseLLMProvider):
                     if isinstance(fn_args, str):
                         try:
                             fn_args = json.loads(fn_args)
-                        except Exception:
+                        except (json.JSONDecodeError, ValueError):
                             fn_args = {}
                     tool_calls_out.append(ToolCall(name=fn_name, arguments=fn_args))
                 elif "text" in part:

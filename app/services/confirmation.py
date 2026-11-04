@@ -1,8 +1,8 @@
-from datetime import datetime, timezone
 import re
 import time
-from typing import Any
 import unicodedata
+from datetime import UTC, datetime
+from typing import Any
 
 from app.config import settings
 from app.crypto.device_auth import verify_device_auth
@@ -142,7 +142,7 @@ class ConfirmationService:
             confirmation_id=confirmation_id,
         )
 
-        iso_expires = datetime.fromtimestamp(record["expires_at"], timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        iso_expires = datetime.fromtimestamp(record["expires_at"], UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         record["params_sha256"] = p_hash
         record["expires_at_iso"] = iso_expires
         return record
@@ -245,13 +245,12 @@ class ConfirmationService:
                 )
 
         # 6. Strict confirmation utterance check (NO LLM)
-        if method == "voice":
-            if not utterance or not is_strict_confirmation(utterance):
-                return (
-                    False,
-                    {"error": {"code": "not_a_confirmation", "message": "Utterance is not a strict confirmation phrase"}},
-                    422,
-                )
+        if method == "voice" and (not utterance or not is_strict_confirmation(utterance)):
+            return (
+                False,
+                {"error": {"code": "not_a_confirmation", "message": "Utterance is not a strict confirmation phrase"}},
+                422,
+            )
 
         # 7. ATOMIC CLAIM UNDER CONCURRENCY (Security Bug 1)
         # Guarantees that only 1 concurrent call can ever succeed
@@ -292,7 +291,7 @@ class ConfirmationService:
         recipient = record["params"].get("recipient", "")
         spoken = build_confirmed_prompt(int(amount_kobo), str(recipient), lang=lang)
 
-        iso_exp = datetime.fromtimestamp(payload["exp"], timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        iso_exp = datetime.fromtimestamp(payload["exp"], UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         return (
             True,

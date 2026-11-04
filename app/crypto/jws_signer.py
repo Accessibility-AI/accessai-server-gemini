@@ -39,40 +39,29 @@ class JWSSigner:
         if private_key_b64:
             raw_bytes = base64.b64decode(private_key_b64)
             self._private_key = ed25519.Ed25519PrivateKey.from_private_bytes(raw_bytes)
-        elif KEY_FILE_PATH.exists() and not is_test_env:
-            try:
-                raw_bytes = base64.b64decode(KEY_FILE_PATH.read_text().strip())
-                self._private_key = ed25519.Ed25519PrivateKey.from_private_bytes(raw_bytes)
-            except Exception:
-                self._private_key = ed25519.Ed25519PrivateKey.generate()
         elif settings.APP_ENV == "production" and not is_test_env:
             raise RuntimeError(
                 "ED25519_PRIVATE_KEY_B64 must be set in production to ensure host backends can verify tokens across deploys and restarts."
             )
-        elif KEY_FILE_PATH.exists():
+        elif KEY_FILE_PATH.exists() and not is_test_env:
             try:
                 raw_bytes = base64.b64decode(KEY_FILE_PATH.read_text().strip())
                 self._private_key = ed25519.Ed25519PrivateKey.from_private_bytes(raw_bytes)
-            except Exception:
+            except (ValueError, OSError):
                 self._private_key = ed25519.Ed25519PrivateKey.generate()
-                priv_raw = self._private_key.private_bytes(
-                    encoding=serialization.Encoding.Raw,
-                    format=serialization.PrivateFormat.Raw,
-                    encryption_algorithm=serialization.NoEncryption(),
-                )
-                KEY_FILE_PATH.write_text(base64.b64encode(priv_raw).decode("ascii"))
         else:
-            # Generate a fresh key pair and persist for dev/test restarts
+            # Generate a fresh key pair and persist for dev restarts
             self._private_key = ed25519.Ed25519PrivateKey.generate()
-            try:
-                priv_raw = self._private_key.private_bytes(
-                    encoding=serialization.Encoding.Raw,
-                    format=serialization.PrivateFormat.Raw,
-                    encryption_algorithm=serialization.NoEncryption(),
-                )
-                KEY_FILE_PATH.write_text(base64.b64encode(priv_raw).decode("ascii"))
-            except Exception:
-                pass
+            if not is_test_env:
+                try:
+                    priv_raw = self._private_key.private_bytes(
+                        encoding=serialization.Encoding.Raw,
+                        format=serialization.PrivateFormat.Raw,
+                        encryption_algorithm=serialization.NoEncryption(),
+                    )
+                    KEY_FILE_PATH.write_text(base64.b64encode(priv_raw).decode("ascii"))
+                except OSError:
+                    pass
 
         self._public_key = self._private_key.public_key()
 
