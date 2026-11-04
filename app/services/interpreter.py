@@ -162,6 +162,7 @@ class InterpreterService:
         screen_descriptor: str | None = None,
         screen: Any = None,
         dialog_state: dict[str, Any] | None = None,
+        locale: str | None = None,
     ) -> InterpretResponse:
         """Interprets a user utterance against the allowed actions list across 8 languages.
 
@@ -191,8 +192,8 @@ class InterpreterService:
                 message=f"Command {ctrl} received.",
             )
 
-        # Detect utterance language
-        lang = detect_language(utterance)
+        # Detect utterance language with optional client locale hint
+        lang = detect_language(utterance, locale=locale)
 
         # Build action maps
         actions_by_id = {}

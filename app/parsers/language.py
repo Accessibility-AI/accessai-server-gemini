@@ -65,12 +65,16 @@ LANGUAGE_PATTERNS = [
 ]
 
 
-def detect_language(utterance: str) -> str:
+def detect_language(utterance: str, locale: str | None = None) -> str:
     """Detects whether utterance is Yoruba, Igbo, Hausa, French, German, Spanish,
 
-    Nigerian Pidgin (Broken English), or Standard English. Defaults to 'en'.
+    Nigerian Pidgin (Broken English), or Standard English. Defaults to 'en' or supplied locale.
     """
     if not utterance:
+        if locale:
+            norm_loc = locale.split("-")[0].lower()
+            if norm_loc in SUPPORTED_LANGUAGES:
+                return norm_loc
         return "en"
 
     text = utterance.strip().lower()
@@ -79,5 +83,10 @@ def detect_language(utterance: str) -> str:
         for pat in patterns:
             if re.search(pat, text, re.IGNORECASE):
                 return lang
+
+    if locale:
+        norm_loc = locale.split("-")[0].lower()
+        if norm_loc in SUPPORTED_LANGUAGES:
+            return norm_loc
 
     return "en"

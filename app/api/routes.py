@@ -91,6 +91,7 @@ async def interpret_utterance(
             screen_descriptor=req.screen_descriptor,
             screen=req.screen,
             dialog_state=dialog,
+            locale=req.locale,
         )
     except ValueError as e:
         err_msg = str(e)
