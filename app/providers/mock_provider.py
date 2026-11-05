@@ -18,11 +18,6 @@ class MockLLMProvider(BaseLLMProvider):
         screen_descriptor: str | None = None,
         dialog_state: dict[str, Any] | None = None,
     ) -> LLMInterpretationResult:
-        manifest_names = {
-            item.get("id") for item in manifest if item.get("id")
-        } | {
-            item.get("name") for item in manifest if item.get("name")
-        }
         text = utterance.strip().lower()
 
         # 1. Check for balance inquiries in all 8 languages
@@ -42,10 +37,17 @@ class MockLLMProvider(BaseLLMProvider):
             # Spanish: "cuál es mi saldo", "consultar saldo", "cuánto tengo en mi cuenta"
             r"\b(cuál es mi saldo|cual es mi saldo|consultar saldo|ver mi saldo|cuánto tengo en mi cuenta)\b",
         ]
+        balance_action_name = None
+        for item in manifest:
+            aid = item.get("id") or item.get("name")
+            if aid in ("get_balance", "check_balance", "balance"):
+                balance_action_name = aid
+                break
+
         for pat in balance_patterns:
-            if re.search(pat, text, re.IGNORECASE) and "get_balance" in manifest_names:
+            if re.search(pat, text, re.IGNORECASE) and balance_action_name:
                 return LLMInterpretationResult(
-                    tool_calls=[ToolCall(name="get_balance", arguments={})],
+                    tool_calls=[ToolCall(name=balance_action_name, arguments={})],
                     confidence=0.96,
                 )
 
@@ -70,7 +72,20 @@ class MockLLMProvider(BaseLLMProvider):
             re.search(pat, text, re.IGNORECASE) for pat in transfer_keywords
         )
 
-        if is_transfer and "transfer_money" in manifest_names:
+        transfer_action_name = None
+        for item in manifest:
+            aid = item.get("id") or item.get("name")
+            params = item.get("params") or []
+            has_amount = any(
+                p.get("type") == "amount_minor" or "amount" in p.get("name", "").lower()
+                for p in params
+                if isinstance(p, dict)
+            )
+            if aid in ("transfer_money", "send_money", "pay_beneficiary", "send_cash", "wire_transfer") or has_amount:
+                transfer_action_name = aid
+                break
+
+        if is_transfer and transfer_action_name:
             args: dict[str, Any] = {}
 
             # Pattern matching for amount extraction across languages
@@ -185,7 +200,7 @@ class MockLLMProvider(BaseLLMProvider):
                 args["recipient"] = recipient
 
             return LLMInterpretationResult(
-                tool_calls=[ToolCall(name="transfer_money", arguments=args)],
+                tool_calls=[ToolCall(name=transfer_action_name, arguments=args)],
                 confidence=0.95,
             )
 

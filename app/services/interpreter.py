@@ -316,9 +316,35 @@ class InterpreterService:
 
         canonical_action_id = action_match.get("id") or action_match.get("name")
 
-        # 4. Handle money transfer validation
-        if canonical_action_id == "transfer_money":
-            recipient = tool_args.get("recipient")
+        # Discover parameters dynamically from manifest
+        manifest_params = action_match.get("params")
+        if not manifest_params and isinstance(action_match.get("parameters"), dict):
+            props = action_match["parameters"].get("properties", {})
+            manifest_params = [{"name": k, "type": v.get("type", "string")} for k, v in props.items()]
+
+        amount_param_name = "amount_minor"
+        recipient_param_name = "recipient"
+        has_amount_minor_param = False
+
+        if isinstance(manifest_params, list):
+            for p in manifest_params:
+                if isinstance(p, dict):
+                    p_name = p.get("name", "")
+                    p_type = p.get("type", "")
+                    if p_type == "amount_minor" or "amount" in p_name.lower():
+                        has_amount_minor_param = True
+                        amount_param_name = p_name
+                    elif "recipient" in p_name.lower() or "beneficiary" in p_name.lower():
+                        recipient_param_name = p_name
+
+        is_transfer_action = (
+            canonical_action_id in ("transfer_money", "send_money", "pay_beneficiary", "wire_transfer")
+            or has_amount_minor_param
+        )
+
+        # 4. Handle money transfer validation following manifest parameter definitions
+        if is_transfer_action:
+            recipient = tool_args.get(recipient_param_name) or tool_args.get("recipient") or tool_args.get("beneficiary")
             if recipient:
                 recipient = str(recipient).strip()
                 # Reject placeholders
@@ -329,9 +355,18 @@ class InterpreterService:
                     recipient = None
 
             amount_raw = tool_args.get("amount_raw")
-            amount_minor_in = tool_args.get("amount_minor")
+            amount_minor_in = (
+                tool_args.get(amount_param_name)
+                or tool_args.get("amount_minor")
+                or tool_args.get("amount")
+            )
             if amount_raw:
                 amount_raw = str(amount_raw).strip()
+            elif not amount_minor_in:
+                # Fallback: extract amount directly from utterance if spoken
+                kobo_fallback = parse_amount_to_kobo(utterance)
+                if kobo_fallback is not None:
+                    amount_minor_in = kobo_fallback
 
             # Check missing parameters
             if not recipient and not amount_raw and not amount_minor_in:
@@ -339,7 +374,7 @@ class InterpreterService:
                 return self._build_response(
                     outcome="clarify",
                     action_id=canonical_action_id,
-                    missing_params=["recipient", "amount_minor"],
+                    missing_params=[recipient_param_name, amount_param_name],
                     confidence=llm_result.confidence,
                     message=msg,
                     spoken_prompt=msg,
@@ -353,13 +388,22 @@ class InterpreterService:
                 if amount_raw:
                     kobo_val = parse_amount_to_kobo(amount_raw)
                     if kobo_val is not None:
+                        params_heard[amount_param_name] = kobo_val
                         params_heard["amount_minor"] = kobo_val
                         params_heard["amount_kobo"] = kobo_val
+                elif amount_minor_in is not None:
+                    try:
+                        kobo_val = int(amount_minor_in)
+                        params_heard[amount_param_name] = kobo_val
+                        params_heard["amount_minor"] = kobo_val
+                        params_heard["amount_kobo"] = kobo_val
+                    except (ValueError, TypeError):
+                        pass
                 return self._build_response(
                     outcome="clarify",
                     action_id=canonical_action_id,
                     params=params_heard,
-                    missing_params=["recipient"],
+                    missing_params=[recipient_param_name],
                     confidence=llm_result.confidence,
                     message=msg,
                     spoken_prompt=msg,
@@ -372,8 +416,8 @@ class InterpreterService:
                 return self._build_response(
                     outcome="clarify",
                     action_id=canonical_action_id,
-                    params={"recipient": recipient},
-                    missing_params=["amount_minor"],
+                    params={recipient_param_name: recipient, "recipient": recipient},
+                    missing_params=[amount_param_name],
                     confidence=llm_result.confidence,
                     message=msg,
                     spoken_prompt=msg,
@@ -396,8 +440,8 @@ class InterpreterService:
                 return self._build_response(
                     outcome="clarify",
                     action_id=canonical_action_id,
-                    params={"recipient": recipient},
-                    missing_params=["amount_minor"],
+                    params={recipient_param_name: recipient, "recipient": recipient},
+                    missing_params=[amount_param_name],
                     confidence=llm_result.confidence,
                     message=msg,
                     spoken_prompt=msg,
@@ -415,8 +459,8 @@ class InterpreterService:
                         return self._build_response(
                             outcome="clarify",
                             action_id=canonical_action_id,
-                            params={"recipient": recipient},
-                            missing_params=["amount_minor"],
+                            params={recipient_param_name: recipient, "recipient": recipient},
+                            missing_params=[amount_param_name],
                             confidence=llm_result.confidence,
                             message=msg,
                             spoken_prompt=msg,
@@ -428,9 +472,11 @@ class InterpreterService:
 
             # Valid parameters with amount_minor as JSON integer in kobo
             verified_params = {
+                recipient_param_name: recipient,
+                amount_param_name: amount_kobo,
+                # Standard and backward-compatibility aliases
                 "recipient": recipient,
                 "amount_minor": amount_kobo,
-                # Backward-compatibility alias
                 "amount_kobo": amount_kobo,
             }
             # Spoken prompt strictly generated from static template (never from LLM)

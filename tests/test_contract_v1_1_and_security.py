@@ -384,3 +384,148 @@ async def test_voice_confirm_not_a_confirmation_422():
         )
         assert res.status_code == 422
         assert res.json()["error"]["code"] == "not_a_confirmation"
+
+
+@pytest.mark.asyncio
+async def test_interpret_missing_params_clarify():
+    """Missing recipient or amount returns outcome=clarify with missing_params."""
+    await init_db()
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        s_res = await client.post("/v1/sessions", json={"app_id": "test-app"})
+        sid = s_res.json()["session_id"]
+
+        # Missing recipient
+        res1 = await client.post(
+            "/v1/interpret",
+            json={"session_id": sid, "text": "Send 5000 naira", "actions": ACTIONS},
+        )
+        assert res1.status_code == 200
+        d1 = res1.json()
+        assert d1["outcome"] == "clarify"
+        assert "recipient" in d1["missing_params"]
+        assert d1["message"] is not None
+
+        # Missing amount
+        res2 = await client.post(
+            "/v1/interpret",
+            json={"session_id": sid, "text": "Send money to David", "actions": ACTIONS},
+        )
+        assert res2.status_code == 200
+        d2 = res2.json()
+        assert d2["outcome"] == "clarify"
+        assert "amount_minor" in d2["missing_params"]
+        assert d2["message"] is not None
+
+
+@pytest.mark.asyncio
+async def test_interpret_control_commands():
+    """Control commands return outcome=control without touching LLM."""
+    await init_db()
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        s_res = await client.post("/v1/sessions", json={"app_id": "test-app"})
+        sid = s_res.json()["session_id"]
+
+        for cmd in ["cancel", "stop", "repeat", "help", "describe screen"]:
+            res = await client.post(
+                "/v1/interpret",
+                json={"session_id": sid, "text": cmd, "actions": ACTIONS},
+            )
+            assert res.status_code == 200
+            data = res.json()
+            assert data["outcome"] == "control"
+            assert data["control"] is not None
+
+
+@pytest.mark.asyncio
+async def test_confirmation_replay_blocked_409():
+    """Confirming an already confirmed transaction returns 409 confirmation_used."""
+    await init_db()
+    device_key, private_key = generate_test_device_key(kid="replay-key-1")
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        s_res = await client.post("/v1/sessions", json={"device_key": device_key})
+        sid = s_res.json()["session_id"]
+
+        p_res = await client.post(
+            "/v1/confirmations",
+            json={"session_id": sid, "action_id": "transfer_money", "params": {"amount_minor": 10000, "recipient": "Kemi"}},
+        )
+        pid = p_res.json()["pending_id"]
+        auth = sign_device_auth(
+            private_key=private_key,
+            session_id=sid,
+            pending_id=pid,
+            action_id="transfer_money",
+            params_sha256=p_res.json()["params_sha256"],
+            kid=device_key["kid"],
+        )
+
+        # First confirm: 200 OK
+        c1 = await client.post(
+            f"/v1/confirmations/{pid}/confirm",
+            json={"session_id": sid, "method": "voice", "utterance": "confirm", "auth": auth},
+        )
+        assert c1.status_code == 200
+        assert c1.json()["status"] == "confirmed"
+
+        # Second confirm: 409 confirmation_used
+        c2 = await client.post(
+            f"/v1/confirmations/{pid}/confirm",
+            json={"session_id": sid, "method": "voice", "utterance": "confirm", "auth": auth},
+        )
+        assert c2.status_code == 409
+        assert c2.json()["error"]["code"] == "confirmation_used"
+
+
+@pytest.mark.asyncio
+async def test_jwks_and_health_endpoints():
+    """Verify JWKS format and health endpoint."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        h_res = await client.get("/health")
+        assert h_res.status_code == 200
+        assert h_res.json()["status"] == "healthy"
+
+        j_res = await client.get("/.well-known/jwks.json")
+        assert j_res.status_code == 200
+        jwks = j_res.json()
+        assert "keys" in jwks
+        assert len(jwks["keys"]) >= 1
+        key = jwks["keys"][0]
+        assert key["kty"] == "OKP"
+        assert key["crv"] == "Ed25519"
+        assert key["use"] == "sig"
+
+
+@pytest.mark.asyncio
+async def test_dynamic_manifest_with_custom_param_names():
+    """Service correctly recognizes amount_minor parameter when action is named send_cash with beneficiary."""
+    await init_db()
+    custom_actions = [
+        {
+            "id": "send_cash",
+            "name": "send cash",
+            "description": "Send cash to beneficiary",
+            "sensitivity": "sensitive",
+            "params": [
+                {"name": "beneficiary", "type": "string", "required": True},
+                {"name": "amount_minor", "type": "amount_minor", "required": True},
+            ],
+        }
+    ]
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        s_res = await client.post("/v1/sessions", json={"app_id": "custom-app"})
+        sid = s_res.json()["session_id"]
+
+        res = await client.post(
+            "/v1/interpret",
+            json={"session_id": sid, "text": "Send 5000 naira to David", "actions": custom_actions},
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["outcome"] == "action"
+        assert data["action_id"] == "send_cash"
+        assert data["params"]["amount_minor"] == 500000

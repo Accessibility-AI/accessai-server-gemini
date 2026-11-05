@@ -125,7 +125,11 @@ def action_to_gemini_declaration(action: dict[str, Any]) -> dict[str, Any]:
             }
 
         # For transfer actions, also accept amount_raw to assist with deterministic speech parsing
-        if "amount_minor" in properties and "amount_raw" not in properties:
+        has_amount = any(
+            p.get("type") == "amount_minor" or "amount" in p.get("name", "").lower()
+            for p in action["params"]
+        )
+        if has_amount and "amount_raw" not in properties:
             properties["amount_raw"] = {
                 "type": "STRING",
                 "description": "Raw spoken amount phrase (e.g. '5k', 'five thousand naira')",

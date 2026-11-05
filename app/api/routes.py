@@ -15,6 +15,7 @@ from app.api.schemas import (
     SessionCreateRequest,
     SessionResponse,
 )
+from app.config import settings
 from app.crypto.jws_signer import signer
 from app.db.database import (
     create_session,
@@ -26,10 +27,19 @@ from app.services.interpreter import InterpreterService, validate_defence_in_dep
 
 router = APIRouter()
 
+_SERVICE_CACHE: dict[str, InterpreterService] = {}
+
+
+def clear_service_cache():
+    _SERVICE_CACHE.clear()
+
 
 def get_interpreter_service() -> InterpreterService:
-    provider = get_llm_provider()
-    return InterpreterService(provider=provider)
+    p_name = settings.LLM_PROVIDER.lower()
+    if p_name not in _SERVICE_CACHE:
+        provider = get_llm_provider(p_name)
+        _SERVICE_CACHE[p_name] = InterpreterService(provider=provider)
+    return _SERVICE_CACHE[p_name]
 
 
 @router.post("/v1/sessions", response_model=SessionResponse, status_code=200)
@@ -210,11 +220,12 @@ async def confirm_action_direct(req: ConfirmRequest):
 
 
 @router.post("/v1/confirmations/{id}/cancel", status_code=204)
-async def cancel_action(id: str, req: CancelRequest):
+async def cancel_action(id: str, req: CancelRequest | None = None):
+    cancel_req = req or CancelRequest()
     success, result, status_code = await ConfirmationService.process_cancel(
         confirmation_id=id,
-        session_id=req.session_id,
-        reason=req.reason or "user_cancelled",
+        session_id=cancel_req.session_id,
+        reason=cancel_req.reason or "user_cancelled",
     )
     if not success:
         return JSONResponse(status_code=status_code, content=result)
