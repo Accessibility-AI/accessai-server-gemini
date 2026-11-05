@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -228,26 +229,43 @@ class GeminiProvider(BaseLLMProvider):
         }
 
         client = self._custom_client or get_shared_client()
-        try:
-            response = await client.post(
-                self.api_url,
-                headers=headers,
-                json=payload,
-            )
-            response.raise_for_status()
-            data = response.json()
-        except httpx.HTTPStatusError as e:
-            error_detail = getattr(e.response, "text", "")
-            logger.error(f"Gemini API error ({e.response.status_code}): {error_detail}")
-            raise RuntimeError(
-                f"Gemini API request failed with status {e.response.status_code}: {error_detail}"
-            ) from e
-        except httpx.TimeoutException as e:
-            logger.error(f"Gemini API request timed out: {e}")
-            raise TimeoutError("Gemini API request timed out after 7.0 seconds") from e
-        except httpx.RequestError as e:
-            logger.error(f"Gemini connection error: {e}")
-            raise RuntimeError(f"Failed to connect to Google Gemini API: {e}") from e
+        max_retries = 1
+        data: dict[str, Any] = {}
+
+        for attempt in range(max_retries + 1):
+            try:
+                response = await client.post(
+                    self.api_url,
+                    headers=headers,
+                    json=payload,
+                )
+                if response.status_code in (429, 503) and attempt < max_retries:
+                    await asyncio.sleep(0.6 * (attempt + 1))
+                    continue
+                response.raise_for_status()
+                data = response.json()
+                break
+            except httpx.HTTPStatusError as e:
+                error_detail = getattr(e.response, "text", "")
+                logger.error(f"Gemini API error ({e.response.status_code}): {error_detail}")
+                if e.response.status_code in (429, 503) and attempt < max_retries:
+                    await asyncio.sleep(0.6 * (attempt + 1))
+                    continue
+                raise RuntimeError(
+                    f"Gemini API request failed with status {e.response.status_code}: {error_detail}"
+                ) from e
+            except httpx.TimeoutException as e:
+                logger.error(f"Gemini API request timed out: {e}")
+                if attempt < max_retries:
+                    await asyncio.sleep(0.5)
+                    continue
+                raise TimeoutError("Gemini API request timed out after 7.0 seconds") from e
+            except httpx.RequestError as e:
+                logger.error(f"Gemini connection error: {e}")
+                if attempt < max_retries:
+                    await asyncio.sleep(0.5)
+                    continue
+                raise RuntimeError(f"Failed to connect to Google Gemini API: {e}") from e
 
         # 4. Extract candidate parts
         tool_calls_out: list[ToolCall] = []
