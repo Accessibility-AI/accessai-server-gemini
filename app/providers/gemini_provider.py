@@ -47,11 +47,11 @@ _SHARED_CLIENT: httpx.AsyncClient | None = None
 
 
 def get_shared_client() -> httpx.AsyncClient:
-    """Reuses a shared httpx.AsyncClient with keep-alive connections and 7.0s timeout."""
+    """Reuses a shared httpx.AsyncClient with keep-alive connections and 5.0s timeout."""
     global _SHARED_CLIENT
     if _SHARED_CLIENT is None or _SHARED_CLIENT.is_closed:
         _SHARED_CLIENT = httpx.AsyncClient(
-            timeout=7.0,
+            timeout=5.0,
             limits=httpx.Limits(max_keepalive_connections=20, max_connections=50),
         )
     return _SHARED_CLIENT
@@ -170,9 +170,7 @@ class GeminiProvider(BaseLLMProvider):
                 or ""
             )
         self.model = model or settings.GEMINI_MODEL or "gemini-flash-lite-latest"
-        self.api_url = (
-            f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
-        )
+        self.api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
         self._custom_client = client
 
     async def interpret(
@@ -240,32 +238,33 @@ class GeminiProvider(BaseLLMProvider):
                     json=payload,
                 )
                 if response.status_code in (429, 503) and attempt < max_retries:
-                    await asyncio.sleep(0.6 * (attempt + 1))
+                    await asyncio.sleep(0.4)
                     continue
                 response.raise_for_status()
                 data = response.json()
                 break
             except httpx.HTTPStatusError as e:
                 error_detail = getattr(e.response, "text", "")
-                logger.error(f"Gemini API error ({e.response.status_code}): {error_detail}")
+                logger.error(
+                    f"Gemini API error ({e.response.status_code}): {error_detail}"
+                )
                 if e.response.status_code in (429, 503) and attempt < max_retries:
-                    await asyncio.sleep(0.6 * (attempt + 1))
+                    await asyncio.sleep(0.4)
                     continue
                 raise RuntimeError(
                     f"Gemini API request failed with status {e.response.status_code}: {error_detail}"
                 ) from e
             except httpx.TimeoutException as e:
                 logger.error(f"Gemini API request timed out: {e}")
-                if attempt < max_retries:
-                    await asyncio.sleep(0.5)
-                    continue
-                raise TimeoutError("Gemini API request timed out after 7.0 seconds") from e
+                # Fail fast on timeout to respect blind user voice UX budget (~5s)
+                raise TimeoutError(
+                    "Gemini API request timed out after 5.0 seconds"
+                ) from e
             except httpx.RequestError as e:
                 logger.error(f"Gemini connection error: {e}")
-                if attempt < max_retries:
-                    await asyncio.sleep(0.5)
-                    continue
-                raise RuntimeError(f"Failed to connect to Google Gemini API: {e}") from e
+                raise RuntimeError(
+                    f"Failed to connect to Google Gemini API: {e}"
+                ) from e
 
         # 4. Extract candidate parts
         tool_calls_out: list[ToolCall] = []

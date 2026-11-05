@@ -50,4 +50,6 @@ async def health_check():
 async def serve_demo():
     if DEMO_HTML.exists():
         return FileResponse(DEMO_HTML, media_type="text/html")
-    return JSONResponse({"message": "AccessAI Gemini Server running. Demo page not found."})
+    return JSONResponse(
+        {"message": "AccessAI Gemini Server running. Demo page not found."}
+    )

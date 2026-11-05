@@ -49,9 +49,16 @@ async def init_db():
                 token TEXT,
                 created_at INTEGER NOT NULL,
                 expires_at INTEGER NOT NULL,
+                sensitivity TEXT DEFAULT 'sensitive',
                 FOREIGN KEY (session_id) REFERENCES sessions(session_id)
             );
         """)
+        cursor_conf = await db.execute("PRAGMA table_info(confirmations);")
+        existing_conf_cols = {row[1] for row in await cursor_conf.fetchall()}
+        if "sensitivity" not in existing_conf_cols:
+            await db.execute(
+                "ALTER TABLE confirmations ADD COLUMN sensitivity TEXT DEFAULT 'sensitive';"
+            )
         await db.commit()
 
 
@@ -62,7 +69,9 @@ async def create_session(
     app_id: str | None = None,
     locale: str | None = None,
 ) -> dict[str, Any]:
-    """Creates or updates a session. Does not fail on duplicate session_id."""
+    """Creates or updates a session. Does not fail on duplicate session_id,
+    and NEVER allows replacing an existing session's device_key (H1 security fix).
+    """
     sid = session_id or str(uuid.uuid4())
     now = int(time.time())
     meta_str = json.dumps(metadata or {})
@@ -72,17 +81,47 @@ async def create_session(
     dk_str = json.dumps(dk_dict) if dk_dict else None
 
     async with aiosqlite.connect(settings.DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        # Check if session already exists
+        async with db.execute(
+            "SELECT * FROM sessions WHERE session_id = ?", (sid,)
+        ) as cursor:
+            existing = await cursor.fetchone()
+
+        if existing:
+            # Preserve existing device_key_json (H1: NEVER overwrite device_key)
+            existing_dk_json = existing["device_key_json"]
+            existing_dk = json.loads(existing_dk_json) if existing_dk_json else None
+            effective_dk = existing_dk if existing_dk is not None else dk_dict
+            await db.execute(
+                """
+                UPDATE sessions SET
+                    metadata_json = coalesce(?, metadata_json),
+                    device_key_json = coalesce(device_key_json, ?),
+                    app_id = coalesce(?, app_id),
+                    locale = coalesce(?, locale),
+                    updated_at = ?
+                WHERE session_id = ?
+                """,
+                (meta_str, dk_str, app_id, locale, now, sid),
+            )
+            await db.commit()
+            return {
+                "session_id": sid,
+                "status": existing["status"],
+                "app_id": app_id or existing["app_id"],
+                "locale": locale or existing["locale"],
+                "device_key": effective_dk,
+                "metadata": metadata or json.loads(existing["metadata_json"] or "{}"),
+                "created_at": existing["created_at"],
+                "updated_at": now,
+            }
+
         await db.execute(
             """
             INSERT INTO sessions (
                 session_id, status, metadata_json, device_key_json, app_id, locale, created_at, updated_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(session_id) DO UPDATE SET
-                metadata_json = coalesce(excluded.metadata_json, sessions.metadata_json),
-                device_key_json = coalesce(excluded.device_key_json, sessions.device_key_json),
-                app_id = coalesce(excluded.app_id, sessions.app_id),
-                locale = coalesce(excluded.locale, sessions.locale),
-                updated_at = excluded.updated_at
             """,
             (sid, "active", meta_str, dk_str, app_id, locale, now, now),
         )
@@ -133,6 +172,7 @@ async def create_pending_confirmation(
     spoken_prompt: str,
     ttl_seconds: int = 60,
     confirmation_id: str | None = None,
+    sensitivity: str = "sensitive",
 ) -> dict[str, Any]:
     conf_id = confirmation_id or f"pc_{uuid.uuid4().hex[:16]}"
     nonce = uuid.uuid4().hex
@@ -144,8 +184,8 @@ async def create_pending_confirmation(
         await db.execute(
             """
             INSERT INTO confirmations (
-                id, session_id, action, params_json, params_hash, nonce, status, spoken_prompt, token, created_at, expires_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                id, session_id, action, params_json, params_hash, nonce, status, spoken_prompt, token, created_at, expires_at, sensitivity
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 conf_id,
@@ -159,6 +199,7 @@ async def create_pending_confirmation(
                 None,
                 now,
                 expires_at,
+                sensitivity,
             ),
         )
         await db.commit()
@@ -175,6 +216,7 @@ async def create_pending_confirmation(
         "spoken_prompt": spoken_prompt,
         "created_at": now,
         "expires_at": expires_at,
+        "sensitivity": sensitivity,
     }
 
 
@@ -187,6 +229,12 @@ async def get_confirmation(conf_id: str) -> dict[str, Any] | None:
             row = await cursor.fetchone()
             if not row:
                 return None
+            row_keys = set(row.keys())
+            sens = (
+                row["sensitivity"]
+                if "sensitivity" in row_keys and row["sensitivity"]
+                else "sensitive"
+            )
             return {
                 "id": row["id"],
                 "session_id": row["session_id"],
@@ -199,6 +247,7 @@ async def get_confirmation(conf_id: str) -> dict[str, Any] | None:
                 "token": row["token"],
                 "created_at": row["created_at"],
                 "expires_at": row["expires_at"],
+                "sensitivity": sens,
             }
 
 

@@ -78,7 +78,9 @@ async def test_no_utterance_retention_in_database():
         assert "transcript" not in conf_cols
 
         # 2. Assert unique utterance string does not appear in any row of sessions
-        cursor = await db.execute("SELECT * FROM sessions WHERE session_id = ?", (session_id,))
+        cursor = await db.execute(
+            "SELECT * FROM sessions WHERE session_id = ?", (session_id,)
+        )
         session_row = await cursor.fetchone()
         assert session_row is not None
         assert unique_secret_utterance not in str(session_row)

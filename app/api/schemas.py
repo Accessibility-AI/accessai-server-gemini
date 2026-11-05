@@ -66,7 +66,9 @@ class InterpretResponse(BaseModel):
     action_id: str | None = None  # MUST be one of request.actions[].id
     params: dict[str, Any] = Field(default_factory=dict)
     missing_params: list[str] = Field(default_factory=list)
-    control: str | None = None  # cancel | stop | repeat | next | previous | help | describe_screen
+    control: str | None = (
+        None  # cancel | stop | repeat | next | previous | help | describe_screen
+    )
     message: str | None = None  # for clarify/unsupported
     confidence: float
 
@@ -86,6 +88,7 @@ class PendingConfirmationRequest(BaseModel):
     action_id: str | None = None
     action: str | None = None
     params: dict[str, Any]
+    sensitivity: str | None = "sensitive"
 
 
 class PendingConfirmationResponse(BaseModel):

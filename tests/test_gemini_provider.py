@@ -21,8 +21,14 @@ MANIFEST = [
         "parameters": {
             "type": "object",
             "properties": {
-                "amount_raw": {"type": "string", "description": "Raw spoken amount phrase"},
-                "amount_numeric_estimate": {"type": "number", "description": "Estimated numeric Naira value"},
+                "amount_raw": {
+                    "type": "string",
+                    "description": "Raw spoken amount phrase",
+                },
+                "amount_numeric_estimate": {
+                    "type": "number",
+                    "description": "Estimated numeric Naira value",
+                },
                 "recipient": {"type": "string", "description": "Name of recipient"},
             },
             "required": ["amount_raw", "recipient"],
@@ -220,9 +226,7 @@ async def test_gemini_end_to_end_zero_guessing_missing_recipient():
     mock_response.raise_for_status.return_value = None
 
     with patch("httpx.AsyncClient.post", return_value=mock_response):
-        res = await service.interpret_utterance(
-            utterance="send 5k", manifest=MANIFEST
-        )
+        res = await service.interpret_utterance(utterance="send 5k", manifest=MANIFEST)
 
     assert res.type == "clarification"
     assert res.clarification_reason == "missing_recipient"

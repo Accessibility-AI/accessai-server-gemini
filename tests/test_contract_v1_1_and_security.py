@@ -103,8 +103,12 @@ async def test_concurrency_single_use_atomicity():
         num_200 = status_codes.count(200)
         num_409 = status_codes.count(409)
 
-        assert num_200 == 1, f"Expected exactly 1 200 OK, got {num_200} (statuses: {status_codes})"
-        assert num_409 == 19, f"Expected 19 409 Conflict, got {num_409} (statuses: {status_codes})"
+        assert num_200 == 1, (
+            f"Expected exactly 1 200 OK, got {num_200} (statuses: {status_codes})"
+        )
+        assert num_409 == 19, (
+            f"Expected 19 409 Conflict, got {num_409} (statuses: {status_codes})"
+        )
 
         # Verify that all 409 responses carry confirmation_used error code
         for r in responses:
@@ -269,7 +273,9 @@ async def test_canonical_hash_unicode_vector():
     # Vector check from API_CONTRACT.md line 121
     ref_params = {"amount_minor": 500000, "recipient": "ben_001"}
     ref_hash = hash_params(ref_params)
-    assert ref_hash == "b729a280eabf6c63b6a6b889bfa1b26d4dad23286f2e3a36b98028e35879cd47"
+    assert (
+        ref_hash == "b729a280eabf6c63b6a6b889bfa1b26d4dad23286f2e3a36b98028e35879cd47"
+    )
 
 
 @pytest.mark.asyncio
@@ -336,20 +342,30 @@ async def test_cancel_endpoint_204_idempotent():
 
         p_res = await client.post(
             "/v1/confirmations",
-            json={"session_id": sid, "action_id": "transfer_money", "params": {"amount_minor": 10000, "recipient": "Kemi"}},
+            json={
+                "session_id": sid,
+                "action_id": "transfer_money",
+                "params": {"amount_minor": 10000, "recipient": "Kemi"},
+            },
         )
         pid = p_res.json()["pending_id"]
 
         # Cancel returns 204
-        c1 = await client.post(f"/v1/confirmations/{pid}/cancel", json={"session_id": sid})
+        c1 = await client.post(
+            f"/v1/confirmations/{pid}/cancel", json={"session_id": sid}
+        )
         assert c1.status_code == 204
 
         # Idempotent: second cancel also returns 204
-        c2 = await client.post(f"/v1/confirmations/{pid}/cancel", json={"session_id": sid})
+        c2 = await client.post(
+            f"/v1/confirmations/{pid}/cancel", json={"session_id": sid}
+        )
         assert c2.status_code == 204
 
         # Cancel with mismatched session_id returns 404
-        c3 = await client.post(f"/v1/confirmations/{pid}/cancel", json={"session_id": "other-session"})
+        c3 = await client.post(
+            f"/v1/confirmations/{pid}/cancel", json={"session_id": "other-session"}
+        )
         assert c3.status_code == 404
 
 
@@ -366,7 +382,11 @@ async def test_voice_confirm_not_a_confirmation_422():
 
         p_res = await client.post(
             "/v1/confirmations",
-            json={"session_id": sid, "action_id": "transfer_money", "params": {"amount_minor": 10000, "recipient": "Kemi"}},
+            json={
+                "session_id": sid,
+                "action_id": "transfer_money",
+                "params": {"amount_minor": 10000, "recipient": "Kemi"},
+            },
         )
         pid = p_res.json()["pending_id"]
         auth = sign_device_auth(
@@ -380,7 +400,12 @@ async def test_voice_confirm_not_a_confirmation_422():
 
         res = await client.post(
             f"/v1/confirmations/{pid}/confirm",
-            json={"session_id": sid, "method": "voice", "utterance": "sure go ahead", "auth": auth},
+            json={
+                "session_id": sid,
+                "method": "voice",
+                "utterance": "sure go ahead",
+                "auth": auth,
+            },
         )
         assert res.status_code == 422
         assert res.json()["error"]["code"] == "not_a_confirmation"
@@ -388,33 +413,37 @@ async def test_voice_confirm_not_a_confirmation_422():
 
 @pytest.mark.asyncio
 async def test_interpret_missing_params_clarify():
-    """Missing recipient or amount returns outcome=clarify with missing_params."""
+    """Partial request returns outcome=action with missing_params and filled params (Contract v1.1)."""
     await init_db()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         s_res = await client.post("/v1/sessions", json={"app_id": "test-app"})
         sid = s_res.json()["session_id"]
 
-        # Missing recipient
+        # Missing recipient: "Send 5000 naira" -> outcome=action, params={amount_minor: 500000}, missing_params=[recipient]
         res1 = await client.post(
             "/v1/interpret",
             json={"session_id": sid, "text": "Send 5000 naira", "actions": ACTIONS},
         )
         assert res1.status_code == 200
         d1 = res1.json()
-        assert d1["outcome"] == "clarify"
+        assert d1["outcome"] == "action"
+        assert d1["action_id"] == "transfer_money"
         assert "recipient" in d1["missing_params"]
+        assert d1["params"]["amount_minor"] == 500000
         assert d1["message"] is not None
 
-        # Missing amount
+        # Missing amount: "Send money to David" -> outcome=action, params={recipient: David}, missing_params=[amount_minor]
         res2 = await client.post(
             "/v1/interpret",
             json={"session_id": sid, "text": "Send money to David", "actions": ACTIONS},
         )
         assert res2.status_code == 200
         d2 = res2.json()
-        assert d2["outcome"] == "clarify"
+        assert d2["outcome"] == "action"
+        assert d2["action_id"] == "transfer_money"
         assert "amount_minor" in d2["missing_params"]
+        assert d2["params"]["recipient"] == "David"
         assert d2["message"] is not None
 
 
@@ -450,7 +479,11 @@ async def test_confirmation_replay_blocked_409():
 
         p_res = await client.post(
             "/v1/confirmations",
-            json={"session_id": sid, "action_id": "transfer_money", "params": {"amount_minor": 10000, "recipient": "Kemi"}},
+            json={
+                "session_id": sid,
+                "action_id": "transfer_money",
+                "params": {"amount_minor": 10000, "recipient": "Kemi"},
+            },
         )
         pid = p_res.json()["pending_id"]
         auth = sign_device_auth(
@@ -465,7 +498,12 @@ async def test_confirmation_replay_blocked_409():
         # First confirm: 200 OK
         c1 = await client.post(
             f"/v1/confirmations/{pid}/confirm",
-            json={"session_id": sid, "method": "voice", "utterance": "confirm", "auth": auth},
+            json={
+                "session_id": sid,
+                "method": "voice",
+                "utterance": "confirm",
+                "auth": auth,
+            },
         )
         assert c1.status_code == 200
         assert c1.json()["status"] == "confirmed"
@@ -473,7 +511,12 @@ async def test_confirmation_replay_blocked_409():
         # Second confirm: 409 confirmation_used
         c2 = await client.post(
             f"/v1/confirmations/{pid}/confirm",
-            json={"session_id": sid, "method": "voice", "utterance": "confirm", "auth": auth},
+            json={
+                "session_id": sid,
+                "method": "voice",
+                "utterance": "confirm",
+                "auth": auth,
+            },
         )
         assert c2.status_code == 409
         assert c2.json()["error"]["code"] == "confirmation_used"
@@ -522,10 +565,289 @@ async def test_dynamic_manifest_with_custom_param_names():
 
         res = await client.post(
             "/v1/interpret",
-            json={"session_id": sid, "text": "Send 5000 naira to David", "actions": custom_actions},
+            json={
+                "session_id": sid,
+                "text": "Send 5000 naira to David",
+                "actions": custom_actions,
+            },
         )
         assert res.status_code == 200
         data = res.json()
         assert data["outcome"] == "action"
         assert data["action_id"] == "send_cash"
         assert data["params"]["amount_minor"] == 500000
+
+
+# ==============================================================================
+# PROBE & RE-REVIEW TEST SUITE (H1, H2, Sensitivity, Partial Requests, pay_bill, Cancel)
+# ==============================================================================
+
+
+@pytest.mark.asyncio
+async def test_h1_cannot_replace_device_key_on_existing_session():
+    """H1 Fix: Re-POST /v1/sessions with an existing session_id CANNOT replace its device_key."""
+    await init_db()
+    key_a, priv_a = generate_test_device_key(kid="victim-key-a")
+    key_b, priv_b = generate_test_device_key(kid="attacker-key-b")
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Victim creates session with key_a
+        res1 = await client.post("/v1/sessions", json={"device_key": key_a})
+        assert res1.status_code == 200
+        sid = res1.json()["session_id"]
+        assert res1.json()["device_key"]["kid"] == "victim-key-a"
+
+        # Attacker tries to hijack session by re-POSTing sid with key_b
+        res2 = await client.post(
+            "/v1/sessions", json={"session_id": sid, "device_key": key_b}
+        )
+        assert res2.status_code == 200
+        # Must retain original key_a!
+        assert res2.json()["device_key"]["kid"] == "victim-key-a"
+
+        # Victim creates a sensitive transfer confirmation
+        p_res = await client.post(
+            "/v1/confirmations",
+            json={
+                "session_id": sid,
+                "action_id": "transfer_money",
+                "params": {"amount_minor": 500000, "recipient": "David"},
+            },
+        )
+        assert p_res.status_code == 200
+        pid = p_res.json()["pending_id"]
+        p_sha = p_res.json()["params_sha256"]
+
+        # Attacker tries to confirm using attacker key_b signature -> MUST FAIL (401 auth_invalid)
+        auth_b = sign_device_auth(
+            priv_b, sid, pid, "transfer_money", p_sha, key_b["kid"]
+        )
+        c_b = await client.post(
+            f"/v1/confirmations/{pid}/confirm",
+            json={
+                "session_id": sid,
+                "method": "voice",
+                "utterance": "confirm",
+                "auth": auth_b,
+            },
+        )
+        assert c_b.status_code == 401
+        assert c_b.json()["error"]["code"] == "auth_invalid"
+
+        # Victim confirms using victim key_a signature -> MUST SUCCEED (200 OK)
+        auth_a = sign_device_auth(
+            priv_a, sid, pid, "transfer_money", p_sha, key_a["kid"]
+        )
+        c_a = await client.post(
+            f"/v1/confirmations/{pid}/confirm",
+            json={
+                "session_id": sid,
+                "method": "voice",
+                "utterance": "confirm",
+                "auth": auth_a,
+            },
+        )
+        assert c_a.status_code == 200
+        assert c_a.json()["status"] == "confirmed"
+
+
+@pytest.mark.asyncio
+async def test_h2_params_grounded_in_utterance_never_trust_hallucinations():
+    """H2 Fix: Model params must be grounded in user utterance.
+
+    - amount_minor 5000 from model for '5k' must be parsed to 500000 kobo.
+    - Hallucinated amount on 'send money to David' must be marked missing.
+    - Hallucinated recipient on 'send 5000 naira' must be marked missing.
+    - Invented amount_raw not in utterance must be discarded.
+    """
+    from app.providers.base import BaseLLMProvider, LLMInterpretationResult, ToolCall
+    from app.services.interpreter import InterpreterService
+
+    class FakeHallucinatingProvider(BaseLLMProvider):
+        def __init__(self, tool_args: dict):
+            self.tool_args = tool_args
+
+        async def interpret(
+            self, utterance, manifest, screen_descriptor=None, dialog_state=None
+        ):
+            return LLMInterpretationResult(
+                tool_calls=[ToolCall(name="transfer_money", arguments=self.tool_args)],
+                confidence=0.96,
+            )
+
+    # 1. Model returns amount_minor: 5000 for "send 5k to David" -> MUST be 500000 kobo (₦5,000)
+    p1 = FakeHallucinatingProvider({"recipient": "David", "amount_minor": 5000})
+    s1 = InterpreterService(provider=p1)
+    res1 = await s1.interpret_utterance("send 5k to David", ACTIONS)
+    assert res1.outcome == "action"
+    assert res1.params["amount_minor"] == 500000
+    assert res1.params["amount_minor"] != 5000
+
+    # 2. Model returns amount_minor: 50000000 for "send 5k to David" -> MUST be 500000 kobo
+    p2 = FakeHallucinatingProvider({"recipient": "David", "amount_minor": 50000000})
+    s2 = InterpreterService(provider=p2)
+    res2 = await s2.interpret_utterance("send 5k to David", ACTIONS)
+    assert res2.outcome == "action"
+    assert res2.params["amount_minor"] == 500000
+
+    # 3. Model invents an amount for "send money to David" -> amount_minor must be MISSING
+    p3 = FakeHallucinatingProvider(
+        {"recipient": "David", "amount_minor": 50000, "amount_raw": "500 naira"}
+    )
+    s3 = InterpreterService(provider=p3)
+    res3 = await s3.interpret_utterance("send money to David", ACTIONS)
+    assert res3.outcome == "action"
+    assert "amount_minor" in res3.missing_params
+    assert "amount_minor" not in res3.params
+    assert res3.params.get("recipient") == "David"
+
+    # 4. Model invents recipient "Alice" for "send 5000 naira" -> recipient must be MISSING
+    p4 = FakeHallucinatingProvider({"recipient": "Alice", "amount_raw": "5000 naira"})
+    s4 = InterpreterService(provider=p4)
+    res4 = await s4.interpret_utterance("send 5000 naira", ACTIONS)
+    assert res4.outcome == "action"
+    assert "recipient" in res4.missing_params
+    assert "recipient" not in res4.params
+    assert res4.params.get("amount_minor") == 500000
+
+
+@pytest.mark.asyncio
+async def test_sensitivity_pay_bill_requires_auth():
+    """Sensitivity Fix: pay_bill marked sensitive strictly requires device auth."""
+    await init_db()
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Create session WITHOUT device key
+        s_res = await client.post("/v1/sessions", json={"locale": "en-NG"})
+        sid = s_res.json()["session_id"]
+
+        # Create pending confirmation for pay_bill with sensitivity: sensitive
+        p_res = await client.post(
+            "/v1/confirmations",
+            json={
+                "session_id": sid,
+                "action_id": "pay_bill",
+                "sensitivity": "sensitive",
+                "params": {"amount_minor": 200000, "biller": "electric"},
+            },
+        )
+        assert p_res.status_code == 200
+        pid = p_res.json()["pending_id"]
+
+        # Confirm on key-less session MUST fail with 401 auth_invalid
+        c_res = await client.post(
+            f"/v1/confirmations/{pid}/confirm",
+            json={"session_id": sid, "method": "touch"},
+        )
+        assert c_res.status_code == 401
+        assert c_res.json()["error"]["code"] == "auth_invalid"
+
+
+@pytest.mark.asyncio
+async def test_partial_request_returns_action_with_missing_params():
+    """Partial Request Fix: 'send money to Amaka' returns outcome=action with missing_params=[amount_minor]."""
+    await init_db()
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        s_res = await client.post("/v1/sessions", json={"locale": "en-NG"})
+        sid = s_res.json()["session_id"]
+
+        res = await client.post(
+            "/v1/interpret",
+            json={"session_id": sid, "text": "send money to Amaka", "actions": ACTIONS},
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["outcome"] == "action"
+        assert data["action_id"] == "transfer_money"
+        assert data["params"]["recipient"] == "Amaka"
+        assert data["missing_params"] == ["amount_minor"]
+        assert "Amaka" in data["message"]
+
+
+@pytest.mark.asyncio
+async def test_pay_bill_completes_without_recipient():
+    """pay_bill Regression Fix: pay_bill only requires amount_minor and never asks for recipient."""
+    await init_db()
+    bill_actions = [
+        {
+            "id": "pay_bill",
+            "name": "pay bill",
+            "description": "Pay electricity or utility bill",
+            "sensitivity": "sensitive",
+            "params": [
+                {"name": "amount_minor", "type": "amount_minor", "required": True},
+            ],
+        }
+    ]
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        s_res = await client.post("/v1/sessions", json={"locale": "en-NG"})
+        sid = s_res.json()["session_id"]
+
+        res = await client.post(
+            "/v1/interpret",
+            json={
+                "session_id": sid,
+                "text": "pay 2000 naira for light",
+                "actions": bill_actions,
+            },
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["outcome"] == "action"
+        assert data["action_id"] == "pay_bill"
+        assert data["params"]["amount_minor"] == 200000
+        assert data["missing_params"] == []
+        assert data["message"] is None
+
+
+@pytest.mark.asyncio
+async def test_cancel_requires_session_id_and_rejects_confirmed_with_409():
+    """Cancel Fix: /cancel requires session_id and cannot cancel an already confirmed record (returns 409)."""
+    await init_db()
+    dk, priv = generate_test_device_key("cancel-test-key")
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        s_res = await client.post("/v1/sessions", json={"device_key": dk})
+        sid = s_res.json()["session_id"]
+
+        p_res = await client.post(
+            "/v1/confirmations",
+            json={
+                "session_id": sid,
+                "action_id": "transfer_money",
+                "params": {"amount_minor": 10000, "recipient": "Kemi"},
+            },
+        )
+        pid = p_res.json()["pending_id"]
+        auth = sign_device_auth(
+            priv, sid, pid, "transfer_money", p_res.json()["params_sha256"], dk["kid"]
+        )
+
+        # 1. Cancel without session_id -> MUST FAIL with 400 bad_request
+        c_no_sid = await client.post(f"/v1/confirmations/{pid}/cancel", json={})
+        assert c_no_sid.status_code == 400
+        assert c_no_sid.json()["error"]["code"] == "bad_request"
+
+        # 2. Confirm the pending transaction -> 200 OK
+        c_ok = await client.post(
+            f"/v1/confirmations/{pid}/confirm",
+            json={
+                "session_id": sid,
+                "method": "voice",
+                "utterance": "confirm",
+                "auth": auth,
+            },
+        )
+        assert c_ok.status_code == 200
+        assert c_ok.json()["status"] == "confirmed"
+
+        # 3. Cancel on an already confirmed transaction -> MUST FAIL with 409 confirmation_used
+        c_after_conf = await client.post(
+            f"/v1/confirmations/{pid}/cancel",
+            json={"session_id": sid},
+        )
+        assert c_after_conf.status_code == 409
+        assert c_after_conf.json()["error"]["code"] == "confirmation_used"

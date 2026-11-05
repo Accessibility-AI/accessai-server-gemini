@@ -35,7 +35,11 @@ class JWSSigner:
 
     def __init__(self, private_key_b64: str = "", kid: str = "voice-intent-key-1"):
         self.kid = kid
-        is_test_env = "pytest" in sys.modules or bool(os.environ.get("PYTEST_CURRENT_TEST")) or settings.APP_ENV in ("test", "development")
+        is_test_env = (
+            "pytest" in sys.modules
+            or bool(os.environ.get("PYTEST_CURRENT_TEST"))
+            or settings.APP_ENV in ("test", "development")
+        )
         if private_key_b64:
             raw_bytes = base64.b64decode(private_key_b64)
             self._private_key = ed25519.Ed25519PrivateKey.from_private_bytes(raw_bytes)
@@ -46,7 +50,9 @@ class JWSSigner:
         elif KEY_FILE_PATH.exists() and not is_test_env:
             try:
                 raw_bytes = base64.b64decode(KEY_FILE_PATH.read_text().strip())
-                self._private_key = ed25519.Ed25519PrivateKey.from_private_bytes(raw_bytes)
+                self._private_key = ed25519.Ed25519PrivateKey.from_private_bytes(
+                    raw_bytes
+                )
             except (ValueError, OSError):
                 self._private_key = ed25519.Ed25519PrivateKey.generate()
         else:

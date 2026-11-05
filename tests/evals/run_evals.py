@@ -68,7 +68,9 @@ async def run_evals(provider_name: str = "mock", limit: int | None = None) -> bo
 
     print("\n=======================================================")
     print(f"RUNNING EVALUATION ON {total} UTTERANCES")
-    print(f"Provider: {provider_name.upper()} ({settings.GEMINI_MODEL if provider_name == 'gemini' else 'local'})")
+    print(
+        f"Provider: {provider_name.upper()} ({settings.GEMINI_MODEL if provider_name == 'gemini' else 'local'})"
+    )
     print("=======================================================\n")
 
     for i, item in enumerate(dataset):
@@ -88,20 +90,23 @@ async def run_evals(provider_name: str = "mock", limit: int | None = None) -> bo
         except Exception as e:  # noqa: BLE001
             elapsed_ms = (time.perf_counter() - start_t) * 1000.0
             latencies_ms.append(elapsed_ms)
-            print(f"[{i+1}/{total}] ERROR on '{utterance}': {e}")
+            print(f"[{i + 1}/{total}] ERROR on '{utterance}': {e}")
             continue
 
         is_correct = False
 
         if item["expected_type"] == "action":
             if (result.outcome == "action" or result.type == "action") and (
-                result.action_id == item["expected_intent"] or result.intent == item["expected_intent"]
+                result.action_id == item["expected_intent"]
+                or result.intent == item["expected_intent"]
             ):
                 if item["expected_intent"] == "transfer_money":
                     expected_recip = item.get("expected_recipient")
                     expected_kobo = item.get("expected_kobo")
                     recip_got = result.params.get("recipient")
-                    kobo_got = result.params.get("amount_minor") or result.params.get("amount_kobo")
+                    kobo_got = result.params.get("amount_minor") or result.params.get(
+                        "amount_kobo"
+                    )
                     if recip_got == expected_recip and kobo_got == expected_kobo:
                         is_correct = True
                 else:
@@ -110,10 +115,13 @@ async def run_evals(provider_name: str = "mock", limit: int | None = None) -> bo
             if result.outcome == "clarify" or result.type == "clarification":
                 is_correct = True
             elif (result.outcome == "action" or result.type == "action") and (
-                result.action_id == "transfer_money" or result.intent == "transfer_money"
+                result.action_id == "transfer_money"
+                or result.intent == "transfer_money"
             ):
                 guessed_transfers += 1
-                print(f"CRITICAL SAFETY VIOLATION: Transfer emitted for utterance: '{utterance}'")
+                print(
+                    f"CRITICAL SAFETY VIOLATION: Transfer emitted for utterance: '{utterance}'"
+                )
                 print(f"Params: {result.params}")
 
         if is_correct:
@@ -128,7 +136,9 @@ async def run_evals(provider_name: str = "mock", limit: int | None = None) -> bo
 
     print("\n---------------- CATEGORY BREAKDOWN ----------------")
     for cat, stats in category_stats.items():
-        cat_acc = (stats["correct"] / stats["total"]) * 100 if stats["total"] > 0 else 0.0
+        cat_acc = (
+            (stats["correct"] / stats["total"]) * 100 if stats["total"] > 0 else 0.0
+        )
         print(
             f"  {cat.ljust(22)}: {stats['correct']}/{stats['total']} ({cat_acc:.1f}%)"
         )
@@ -164,7 +174,9 @@ async def run_evals(provider_name: str = "mock", limit: int | None = None) -> bo
         print("PASS: Intent accuracy met (>= 95%)!")
 
     if guessed_transfers > 0:
-        print("FAIL: Zero-tolerance violation: transfers were emitted with guessed recipient/amount!")
+        print(
+            "FAIL: Zero-tolerance violation: transfers were emitted with guessed recipient/amount!"
+        )
         success = False
     else:
         print("PASS: Zero transfers emitted with guessed recipient or amount!")

@@ -51,7 +51,45 @@ class MockLLMProvider(BaseLLMProvider):
                     confidence=0.96,
                 )
 
-        # 2. Check for transfer requests across all 8 languages
+        # 2. Check for bill payments
+        bill_action_name = None
+        for item in manifest:
+            aid = item.get("id") or item.get("name") or ""
+            if any(
+                k in aid.lower()
+                for k in ("bill", "utility", "light", "electricity", "nepa", "dstv")
+            ):
+                bill_action_name = aid
+                break
+
+        is_bill = bool(
+            re.search(
+                r"\b(bill|bills|light|electricity|nepa|power|dstv|gotv|water|internet|airtime|data)\b",
+                text,
+                re.IGNORECASE,
+            )
+        )
+        if is_bill and bill_action_name:
+            args: dict[str, Any] = {}
+            amount_patterns = [
+                r"(\d+\s*naira\s*(?:and\s*)?\d+\s*kobo)",
+                r"(?:₦|n|ngn|#)?\s*(\d+(?:,\d+)*(?:\.\d+)?)\s*(?:k|grand|m|million|b|billion)\b(?:\s*nairas?)?",
+                r"(?:₦|n|ngn|#)\s*(\d+(?:,\d+)*(?:\.\d+)?)",
+                r"\b(\d+(?:,\d+)*(?:\.\d+)?)\s*(?:nairas?|kobo)\b",
+            ]
+            for pat in amount_patterns:
+                m = re.search(pat, text, re.IGNORECASE)
+                if m:
+                    cand = m.group(0).strip()
+                    if parse_amount_to_kobo(cand):
+                        args["amount_raw"] = cand
+                        break
+            return LLMInterpretationResult(
+                tool_calls=[ToolCall(name=bill_action_name, arguments=args)],
+                confidence=0.96,
+            )
+
+        # 3. Check for transfer requests across all 8 languages
         transfer_keywords = [
             # English & Pidgin: send, transfer, wire, pay, give, dash
             r"\b(send|transfer|wire|pay|give|dash)\b",
@@ -74,14 +112,26 @@ class MockLLMProvider(BaseLLMProvider):
 
         transfer_action_name = None
         for item in manifest:
-            aid = item.get("id") or item.get("name")
+            aid = item.get("id") or item.get("name") or ""
+            if aid == bill_action_name:
+                continue
             params = item.get("params") or []
             has_amount = any(
                 p.get("type") == "amount_minor" or "amount" in p.get("name", "").lower()
                 for p in params
                 if isinstance(p, dict)
             )
-            if aid in ("transfer_money", "send_money", "pay_beneficiary", "send_cash", "wire_transfer") or has_amount:
+            if (
+                aid
+                in (
+                    "transfer_money",
+                    "send_money",
+                    "pay_beneficiary",
+                    "send_cash",
+                    "wire_transfer",
+                )
+                or has_amount
+            ):
                 transfer_action_name = aid
                 break
 
@@ -162,6 +212,17 @@ class MockLLMProvider(BaseLLMProvider):
                 "l'argent",
                 "argent",
                 "solde",
+                "light",
+                "electricity",
+                "bill",
+                "bills",
+                "nepa",
+                "dstv",
+                "gotv",
+                "water",
+                "airtime",
+                "data",
+                "power",
                 "compte",
                 "geld",
                 "kontostand",

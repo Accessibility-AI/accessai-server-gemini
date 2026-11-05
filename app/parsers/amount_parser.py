@@ -285,15 +285,8 @@ def words_to_number(text: str) -> Decimal | None:
     return total + current
 
 
-def parse_amount_to_kobo(raw_text: str) -> int | None:
-    """Deterministically parses raw amount text into Nigerian kobo (1 Naira = 100 kobo).
-
-    Handles English, Pidgin, Yoruba, Igbo, Hausa, French, German, and Spanish:
-    - Shorthand: '5k', '1.5k', '20k', '2m', '5 grand'
-    - Currency symbols: '₦5000', 'N5000', 'NGN 5,000.50', '#5000'
-    - Multilingual words: 'five thousand naira', 'ẹgbẹrún márùn-ún', 'puku ise', 'dubu biyar', 'cinq mille', 'fünftausend', 'cinco mil'
-    - Compound currency: 'five hundred naira fifty kobo', '75 kobo'
-    """
+def _parse_direct_kobo(raw_text: str) -> int | None:
+    """Helper to parse raw amount strings directly into kobo."""
     if not raw_text or not isinstance(raw_text, str):
         return None
 
@@ -353,6 +346,99 @@ def parse_amount_to_kobo(raw_text: str) -> int | None:
         return round(naira_val * Decimal(100))
 
     return None
+
+
+def extract_amount_kobo(text: str) -> int | None:
+    """Extracts and parses amount in kobo from an arbitrary utterance.
+
+    Returns None if no grounded amount expression is found.
+    """
+    if not text or not isinstance(text, str):
+        return None
+
+    # 1. Direct parse (works if text is an isolated amount, e.g. '5000 naira', '5k', '₦5,000')
+    direct = _parse_direct_kobo(text)
+    if direct is not None:
+        return direct
+
+    # 2. Look for compound naira and kobo in utterance (e.g. 'send 500 naira and 50 kobo to David')
+    m_compound = re.search(
+        r"\b(\d+(?:\.\d+)?|\w+)\s*naira\s*(?:and\s*)?(\d+|\w+)\s*kobo\b",
+        text,
+        re.IGNORECASE,
+    )
+    if m_compound:
+        res = _parse_direct_kobo(m_compound.group(0))
+        if res is not None:
+            return res
+
+    # 3. Look for shorthand multiplier in utterance (e.g. '5k', '1.5k', '20k', '5 grand', '2m')
+    m_short = re.search(
+        r"\b(\d+(?:\.\d+)?)\s*(k|grand|million|m|billion|b)\b",
+        text,
+        re.IGNORECASE,
+    )
+    if m_short:
+        res = _parse_direct_kobo(m_short.group(0))
+        if res is not None:
+            return res
+
+    # 4. Currency prefixed/suffixed expressions (e.g. '₦5000', '#5000', '5000 naira', 'N2000')
+    m_curr = re.search(
+        r"(?:[₦#]|n|ngn\s*)(\d+(?:,\d+)*(?:\.\d+)?)|(\d+(?:,\d+)*(?:\.\d+)?)\s*(?:naira|ngn|kobo)",
+        text,
+        re.IGNORECASE,
+    )
+    if m_curr:
+        res = _parse_direct_kobo(m_curr.group(0))
+        if res is not None:
+            return res
+
+    # 5. Multilingual number word sequences (e.g. 'five thousand naira', 'twenty thousand')
+    all_num_words = (
+        set(ONES_AND_TEENS.keys())
+        | set(TENS.keys())
+        | set(SCALES.keys())
+        | {"half", "a", "and"}
+    )
+    words = re.findall(r"\b[\w'-]+\b", text.lower())
+    num_seq = []
+    for w in words:
+        if w in all_num_words or w in ("naira", "kobo"):
+            num_seq.append(w)
+        else:
+            if num_seq:
+                cand = " ".join(num_seq)
+                res = _parse_direct_kobo(cand)
+                if res is not None and res > 0:
+                    return res
+                num_seq = []
+    if num_seq:
+        cand = " ".join(num_seq)
+        res = _parse_direct_kobo(cand)
+        if res is not None and res > 0:
+            return res
+
+    # 6. Standalone digits (1-9 digits) e.g. 'transfer 5000 to David'
+    m_digits = re.search(r"\b(0|[1-9]\d{0,8}(?:\.\d{1,2})?)\b", text)
+    if m_digits:
+        res = _parse_direct_kobo(m_digits.group(1))
+        if res is not None:
+            return res
+
+    return None
+
+
+def parse_amount_to_kobo(raw_text: str) -> int | None:
+    """Deterministically parses raw amount text into Nigerian kobo (1 Naira = 100 kobo).
+
+    Handles English, Pidgin, Yoruba, Igbo, Hausa, French, German, and Spanish:
+    - Shorthand: '5k', '1.5k', '20k', '2m', '5 grand'
+    - Currency symbols: '₦5000', 'N5000', 'NGN 5,000.50', '#5000'
+    - Multilingual words: 'five thousand naira', 'ẹgbẹrún márùn-ún', 'puku ise', 'dubu biyar', 'cinq mille', 'fünftausend', 'cinco mil'
+    - Compound currency: 'five hundred naira fifty kobo', '75 kobo'
+    """
+    return extract_amount_kobo(raw_text)
 
 
 def _parse_naira_portion(text: str) -> Decimal | None:

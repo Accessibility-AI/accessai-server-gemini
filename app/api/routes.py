@@ -51,9 +51,9 @@ async def create_new_session(req: SessionCreateRequest):
         app_id=req.app_id,
         locale=req.locale,
     )
-    expires_at_iso = datetime.fromtimestamp(
-        sess["created_at"] + 86400, UTC
-    ).strftime("%Y-%m-%dT%H:%M:%SZ")
+    expires_at_iso = datetime.fromtimestamp(sess["created_at"] + 86400, UTC).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
     sess["expires_at"] = expires_at_iso
     return sess
 
@@ -67,7 +67,9 @@ async def interpret_utterance(
     if not text:
         return JSONResponse(
             status_code=400,
-            content={"error": {"code": "bad_request", "message": "Missing text or utterance"}},
+            content={
+                "error": {"code": "bad_request", "message": "Missing text or utterance"}
+            },
         )
 
     actions = req.actions or req.manifest or []
@@ -91,7 +93,12 @@ async def interpret_utterance(
     if not session:
         return JSONResponse(
             status_code=401,
-            content={"error": {"code": "session_expired", "message": "Unknown or expired session_id"}},
+            content={
+                "error": {
+                    "code": "session_expired",
+                    "message": "Unknown or expired session_id",
+                }
+            },
         )
 
     try:
@@ -128,32 +135,54 @@ async def interpret_utterance(
             )
         return JSONResponse(
             status_code=500,
-            content={"error": {"code": "server", "message": f"Interpretation failed: {err_msg}"}},
+            content={
+                "error": {
+                    "code": "server",
+                    "message": f"Interpretation failed: {err_msg}",
+                }
+            },
         )
 
 
-@router.post("/v1/confirmations", response_model=PendingConfirmationResponse, status_code=200)
-@router.post("/v1/confirmations/pending", response_model=PendingConfirmationResponse, status_code=200)
+@router.post(
+    "/v1/confirmations", response_model=PendingConfirmationResponse, status_code=200
+)
+@router.post(
+    "/v1/confirmations/pending",
+    response_model=PendingConfirmationResponse,
+    status_code=200,
+)
 async def create_pending_confirmation_endpoint(req: PendingConfirmationRequest):
     # Security Bug 3: Reject unknown sessions with session_expired (401)
     session = await get_session(req.session_id)
     if not session:
         return JSONResponse(
             status_code=401,
-            content={"error": {"code": "session_expired", "message": "Unknown or expired session_id"}},
+            content={
+                "error": {
+                    "code": "session_expired",
+                    "message": "Unknown or expired session_id",
+                }
+            },
         )
 
     action_name = req.action_id or req.action
     if not action_name:
         return JSONResponse(
             status_code=400,
-            content={"error": {"code": "bad_request", "message": "Missing action or action_id"}},
+            content={
+                "error": {
+                    "code": "bad_request",
+                    "message": "Missing action or action_id",
+                }
+            },
         )
 
     record = await ConfirmationService.create_pending(
         session_id=req.session_id,
         action=action_name,
         params=req.params,
+        sensitivity=req.sensitivity or "sensitive",
     )
     return {
         "pending_id": record["pending_id"],
@@ -174,7 +203,9 @@ async def confirm_action(id: str, req: ConfirmRequest):
     if not req.session_id:
         return JSONResponse(
             status_code=404,
-            content={"error": {"code": "not_found", "message": "session_id is required"}},
+            content={
+                "error": {"code": "not_found", "message": "session_id is required"}
+            },
         )
 
     auth_dict = req.auth.model_dump() if req.auth else None
@@ -197,13 +228,20 @@ async def confirm_action_direct(req: ConfirmRequest):
     if not conf_id:
         return JSONResponse(
             status_code=400,
-            content={"error": {"code": "bad_request", "message": "Missing confirmation_id or pending_id"}},
+            content={
+                "error": {
+                    "code": "bad_request",
+                    "message": "Missing confirmation_id or pending_id",
+                }
+            },
         )
 
     if not req.session_id:
         return JSONResponse(
             status_code=404,
-            content={"error": {"code": "not_found", "message": "session_id is required"}},
+            content={
+                "error": {"code": "not_found", "message": "session_id is required"}
+            },
         )
 
     auth_dict = req.auth.model_dump() if req.auth else None
@@ -222,6 +260,13 @@ async def confirm_action_direct(req: ConfirmRequest):
 @router.post("/v1/confirmations/{id}/cancel", status_code=204)
 async def cancel_action(id: str, req: CancelRequest | None = None):
     cancel_req = req or CancelRequest()
+    if not cancel_req.session_id:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": {"code": "bad_request", "message": "session_id is required"}
+            },
+        )
     success, result, status_code = await ConfirmationService.process_cancel(
         confirmation_id=id,
         session_id=cancel_req.session_id,

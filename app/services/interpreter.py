@@ -5,7 +5,7 @@ from typing import Any
 
 from app.api.schemas import InterpretResponse
 from app.config import settings
-from app.parsers.amount_parser import parse_amount_to_kobo, verify_amount_agreement
+from app.parsers.amount_parser import parse_amount_to_kobo
 from app.parsers.language import detect_language
 from app.providers.base import BaseLLMProvider
 from app.templates.speech import (
@@ -133,8 +133,13 @@ class InterpreterService:
         safe_missing = missing_params or []
         prompt = spoken_prompt or message or ""
 
-        # Map outcome to legacy type
-        legacy_type = "action" if outcome == "action" else "clarification"
+        # Map outcome to legacy type: if there are missing params, legacy clients see "clarification",
+        # while v1.1 contract sees outcome="action" with missing_params populated.
+        legacy_type = (
+            "clarification"
+            if safe_missing
+            else ("action" if outcome == "action" else "clarification")
+        )
 
         return InterpretResponse(
             request_id=req_id,
@@ -218,7 +223,13 @@ class InterpreterService:
                     merged_params["amount_minor"] = parsed_kobo
                     merged_params["amount_kobo"] = parsed_kobo
                     recipient = merged_params.get("recipient")
-                    spoken = build_transfer_confirmation_prompt(parsed_kobo, recipient or "", lang=lang) if recipient else None
+                    spoken = (
+                        build_transfer_confirmation_prompt(
+                            parsed_kobo, recipient or "", lang=lang
+                        )
+                        if recipient
+                        else None
+                    )
                     return self._build_response(
                         outcome="action",
                         action_id=pending_id,
@@ -314,188 +325,12 @@ class InterpreterService:
                 language=lang,
             )
 
-        canonical_action_id = action_match.get("id") or action_match.get("name")
-
-        # Discover parameters dynamically from manifest
-        manifest_params = action_match.get("params")
-        if not manifest_params and isinstance(action_match.get("parameters"), dict):
-            props = action_match["parameters"].get("properties", {})
-            manifest_params = [{"name": k, "type": v.get("type", "string")} for k, v in props.items()]
-
-        amount_param_name = "amount_minor"
-        recipient_param_name = "recipient"
-        has_amount_minor_param = False
-
-        if isinstance(manifest_params, list):
-            for p in manifest_params:
-                if isinstance(p, dict):
-                    p_name = p.get("name", "")
-                    p_type = p.get("type", "")
-                    if p_type == "amount_minor" or "amount" in p_name.lower():
-                        has_amount_minor_param = True
-                        amount_param_name = p_name
-                    elif "recipient" in p_name.lower() or "beneficiary" in p_name.lower():
-                        recipient_param_name = p_name
-
-        is_transfer_action = (
-            canonical_action_id in ("transfer_money", "send_money", "pay_beneficiary", "wire_transfer")
-            or has_amount_minor_param
+        canonical_action_id = (
+            action_match.get("id") or action_match.get("name") or tool_name
         )
 
-        # 4. Handle money transfer validation following manifest parameter definitions
-        if is_transfer_action:
-            recipient = tool_args.get(recipient_param_name) or tool_args.get("recipient") or tool_args.get("beneficiary")
-            if recipient:
-                recipient = str(recipient).strip()
-                # Reject placeholders
-                if recipient.lower() in [
-                    "someone", "person", "recipient", "anybody", "user",
-                    "none", "quelqu'un", "jemand", "alguien",
-                ]:
-                    recipient = None
-
-            amount_raw = tool_args.get("amount_raw")
-            amount_minor_in = (
-                tool_args.get(amount_param_name)
-                or tool_args.get("amount_minor")
-                or tool_args.get("amount")
-            )
-            if amount_raw:
-                amount_raw = str(amount_raw).strip()
-            elif not amount_minor_in:
-                # Fallback: extract amount directly from utterance if spoken
-                kobo_fallback = parse_amount_to_kobo(utterance)
-                if kobo_fallback is not None:
-                    amount_minor_in = kobo_fallback
-
-            # Check missing parameters
-            if not recipient and not amount_raw and not amount_minor_in:
-                msg = build_clarification_prompt("missing_amount_and_recipient", lang=lang)
-                return self._build_response(
-                    outcome="clarify",
-                    action_id=canonical_action_id,
-                    missing_params=[recipient_param_name, amount_param_name],
-                    confidence=llm_result.confidence,
-                    message=msg,
-                    spoken_prompt=msg,
-                    clarification_reason="missing_amount_and_recipient",
-                    language=lang,
-                )
-
-            if not recipient:
-                msg = build_clarification_prompt("missing_recipient", lang=lang)
-                params_heard = {}
-                if amount_raw:
-                    kobo_val = parse_amount_to_kobo(amount_raw)
-                    if kobo_val is not None:
-                        params_heard[amount_param_name] = kobo_val
-                        params_heard["amount_minor"] = kobo_val
-                        params_heard["amount_kobo"] = kobo_val
-                elif amount_minor_in is not None:
-                    try:
-                        kobo_val = int(amount_minor_in)
-                        params_heard[amount_param_name] = kobo_val
-                        params_heard["amount_minor"] = kobo_val
-                        params_heard["amount_kobo"] = kobo_val
-                    except (ValueError, TypeError):
-                        pass
-                return self._build_response(
-                    outcome="clarify",
-                    action_id=canonical_action_id,
-                    params=params_heard,
-                    missing_params=[recipient_param_name],
-                    confidence=llm_result.confidence,
-                    message=msg,
-                    spoken_prompt=msg,
-                    clarification_reason="missing_recipient",
-                    language=lang,
-                )
-
-            if not amount_raw and not amount_minor_in:
-                msg = build_clarification_prompt("missing_amount", recipient=recipient, lang=lang)
-                return self._build_response(
-                    outcome="clarify",
-                    action_id=canonical_action_id,
-                    params={recipient_param_name: recipient, "recipient": recipient},
-                    missing_params=[amount_param_name],
-                    confidence=llm_result.confidence,
-                    message=msg,
-                    spoken_prompt=msg,
-                    clarification_reason="missing_amount",
-                    language=lang,
-                )
-
-            # Deterministic parsing to kobo
-            amount_kobo = None
-            if amount_raw:
-                amount_kobo = parse_amount_to_kobo(amount_raw)
-            elif amount_minor_in is not None:
-                try:
-                    amount_kobo = int(amount_minor_in)
-                except (ValueError, TypeError):
-                    amount_kobo = None
-
-            if amount_kobo is None or amount_kobo <= 0:
-                msg = build_clarification_prompt("unparseable_amount", lang=lang)
-                return self._build_response(
-                    outcome="clarify",
-                    action_id=canonical_action_id,
-                    params={recipient_param_name: recipient, "recipient": recipient},
-                    missing_params=[amount_param_name],
-                    confidence=llm_result.confidence,
-                    message=msg,
-                    spoken_prompt=msg,
-                    clarification_reason="unparseable_amount",
-                    language=lang,
-                )
-
-            # Cross-check against LLM's numeric estimate if provided
-            llm_estimate = tool_args.get("amount_numeric_estimate")
-            if llm_estimate is not None:
-                try:
-                    llm_num = float(llm_estimate)
-                    if not verify_amount_agreement(amount_kobo, llm_num):
-                        msg = build_clarification_prompt("amount_mismatch", lang=lang)
-                        return self._build_response(
-                            outcome="clarify",
-                            action_id=canonical_action_id,
-                            params={recipient_param_name: recipient, "recipient": recipient},
-                            missing_params=[amount_param_name],
-                            confidence=llm_result.confidence,
-                            message=msg,
-                            spoken_prompt=msg,
-                            clarification_reason="amount_mismatch",
-                            language=lang,
-                        )
-                except (ValueError, TypeError):
-                    pass
-
-            # Valid parameters with amount_minor as JSON integer in kobo
-            verified_params = {
-                recipient_param_name: recipient,
-                amount_param_name: amount_kobo,
-                # Standard and backward-compatibility aliases
-                "recipient": recipient,
-                "amount_minor": amount_kobo,
-                "amount_kobo": amount_kobo,
-            }
-            # Spoken prompt strictly generated from static template (never from LLM)
-            spoken_text = build_transfer_confirmation_prompt(
-                amount_kobo, recipient, lang=lang
-            )
-
-            return self._build_response(
-                outcome="action",
-                action_id=canonical_action_id,
-                params=verified_params,
-                missing_params=[],
-                confidence=llm_result.confidence,
-                spoken_prompt=spoken_text,
-                language=lang,
-            )
-
-        # 5. Handle get_balance
-        elif canonical_action_id == "get_balance":
+        # 4. Handle get_balance
+        if canonical_action_id in ("get_balance", "check_balance", "balance"):
             spoken_text = build_balance_prompt(lang=lang)
             return self._build_response(
                 outcome="action",
@@ -503,12 +338,13 @@ class InterpreterService:
                 params={},
                 missing_params=[],
                 confidence=llm_result.confidence,
+                message=None,
                 spoken_prompt=spoken_text,
                 language=lang,
             )
 
-        # 6. Handle get_transactions / history
-        elif canonical_action_id in ("get_transactions", "get_transaction_history"):
+        # 5. Handle get_transactions / history
+        if canonical_action_id in ("get_transactions", "get_transaction_history"):
             spoken_text = build_transactions_prompt(lang=lang)
             return self._build_response(
                 outcome="action",
@@ -516,18 +352,212 @@ class InterpreterService:
                 params={},
                 missing_params=[],
                 confidence=llm_result.confidence,
+                message=None,
                 spoken_prompt=spoken_text,
                 language=lang,
             )
 
-        # 7. Other generic manifest actions
-        else:
+        # 6. Manifest-driven parameter extraction and grounding for all actions
+        # (Fixes H2, bill payments, and partial requests)
+        manifest_params = action_match.get("params")
+        if not manifest_params and isinstance(action_match.get("parameters"), dict):
+            props = action_match["parameters"].get("properties", {})
+            req_set = set(action_match["parameters"].get("required") or [])
+            manifest_params = [
+                {"name": k, "type": v.get("type", "string"), "required": k in req_set}
+                for k, v in props.items()
+            ]
+
+        declared_params: dict[str, dict[str, Any]] = {}
+        required_param_names: list[str] = []
+        amount_param_names: list[str] = []
+        recipient_param_name: str | None = None
+
+        if isinstance(manifest_params, list):
+            for p in manifest_params:
+                if isinstance(p, dict):
+                    p_name = p.get("name")
+                    if not p_name:
+                        continue
+                    declared_params[p_name] = p
+                    if p.get("required"):
+                        required_param_names.append(p_name)
+
+                    p_type = str(p.get("type", "")).lower()
+                    p_lower = p_name.lower()
+                    if (
+                        p_type == "amount_minor"
+                        or "amount" in p_lower
+                        or p_lower in ("kobo", "sum")
+                    ):
+                        amount_param_names.append(p_name)
+                    elif "recipient" in p_lower or "beneficiary" in p_lower:
+                        recipient_param_name = p_name
+
+        verified_params: dict[str, Any] = {}
+
+        # 6a. Ground and parse amount (H2: Never trust hallucinated amounts)
+        if amount_param_names:
+            # Deterministic parse strictly from user utterance
+            parsed_from_utt = parse_amount_to_kobo(utterance)
+            raw_model_val = tool_args.get("amount_raw")
+            # Only consider amount_raw if it is actually substring in user utterance
+            if raw_model_val and str(raw_model_val).lower() in utterance.lower():
+                parsed_from_raw = parse_amount_to_kobo(str(raw_model_val))
+                amount_kobo = parsed_from_raw or parsed_from_utt
+            else:
+                amount_kobo = parsed_from_utt
+
+            if amount_kobo is not None and amount_kobo > 0:
+                verified_params["amount_minor"] = amount_kobo
+                verified_params["amount_kobo"] = amount_kobo
+                for p_name in amount_param_names:
+                    p_def = declared_params[p_name]
+                    p_type = str(p_def.get("type", "")).lower()
+                    if p_name == "amount_raw" or p_type == "string":
+                        if (
+                            raw_model_val
+                            and str(raw_model_val).lower() in utterance.lower()
+                        ):
+                            verified_params[p_name] = str(raw_model_val)
+                        else:
+                            verified_params[p_name] = f"{int(amount_kobo / 100)}"
+                    elif p_name == "amount_numeric_estimate" or p_type in (
+                        "number",
+                        "float",
+                    ):
+                        verified_params[p_name] = float(amount_kobo / 100)
+                    else:
+                        verified_params[p_name] = amount_kobo
+
+        # 6b. Ground recipient in utterance (H2: Never trust invented recipients)
+        if recipient_param_name:
+            cand_recip = (
+                tool_args.get(recipient_param_name)
+                or tool_args.get("recipient")
+                or tool_args.get("beneficiary")
+            )
+            if cand_recip:
+                cand_str = str(cand_recip).strip()
+                # Grounding check: recipient MUST be present in user utterance and not a placeholder!
+                if (
+                    cand_str.lower()
+                    not in [
+                        "someone",
+                        "person",
+                        "recipient",
+                        "anybody",
+                        "user",
+                        "none",
+                        "quelqu'un",
+                        "jemand",
+                        "alguien",
+                    ]
+                    and cand_str.lower() in utterance.lower()
+                ):
+                    verified_params[recipient_param_name] = cand_str
+                    verified_params["recipient"] = cand_str
+
+        # 6c. Ground any other declared params from tool_args
+        for p_name in declared_params:
+            if p_name in verified_params:
+                continue
+            # Never copy ungrounded amount or recipient params from tool_args (H2 fix)
+            p_lower = p_name.lower()
+            if (
+                "amount" in p_lower
+                or p_lower in ("kobo", "sum")
+                or "recipient" in p_lower
+                or "beneficiary" in p_lower
+            ):
+                continue
+            val = tool_args.get(p_name)
+            if val is not None and (
+                not isinstance(val, str)
+                or (isinstance(val, str) and val.lower() in utterance.lower())
+            ):
+                verified_params[p_name] = val
+
+        # 6d. Compute missing required parameters
+        missing_params = [
+            p_name for p_name in required_param_names if p_name not in verified_params
+        ]
+
+        # 6e. If required parameters are missing, outcome remains "action" with missing_params list
+        # (Contract v1.1 / SDK DialogEngine standard)
+        if missing_params:
+            has_missing_recip = bool(
+                recipient_param_name and recipient_param_name in missing_params
+            )
+            has_missing_amt = any(p in missing_params for p in amount_param_names)
+
+            if has_missing_recip and has_missing_amt:
+                prompt = build_clarification_prompt(
+                    "missing_amount_and_recipient", lang=lang
+                )
+                c_reason = "missing_amount_and_recipient"
+            elif has_missing_recip:
+                prompt = build_clarification_prompt("missing_recipient", lang=lang)
+                c_reason = "missing_recipient"
+            elif has_missing_amt:
+                c_reason = "missing_amount"
+                recip_val = verified_params.get("recipient")
+                if recip_val:
+                    prompt = build_clarification_prompt(
+                        "missing_amount", recipient=recip_val, lang=lang
+                    )
+                else:
+                    prompts = {
+                        "en": "How much would you like to pay?",
+                        "pcm": "How much you wan pay?",
+                        "yo": "Iye owo melo ni ẹ fẹ san?",
+                        "ig": "Ego ole ka ị chọrọ ịkwụ?",
+                        "ha": "Nawa kake son biya?",
+                        "fr": "Combien souhaitez-vous payer ?",
+                        "de": "Wie viel möchten Sie bezahlen?",
+                        "es": "¿Cuánto le gustaría pagar?",
+                    }
+                    prompt = prompts.get(lang, prompts["en"])
+            else:
+                prompt = f"Please specify {', '.join(missing_params)}."
+                c_reason = f"missing_{'_and_'.join(missing_params)}"
+
             return self._build_response(
                 outcome="action",
                 action_id=canonical_action_id,
-                params=tool_args,
-                missing_params=[],
+                params=verified_params,
+                missing_params=missing_params,
                 confidence=llm_result.confidence,
-                spoken_prompt=f"Performing {canonical_action_id.replace('_', ' ')}.",
+                message=prompt,
+                spoken_prompt=prompt,
+                clarification_reason=c_reason,
                 language=lang,
             )
+
+        # 6f. All required parameters are present: Action is complete
+        amount_kobo = (
+            verified_params.get("amount_minor")
+            or verified_params.get("amount_kobo")
+            or 0
+        )
+        recip_val = verified_params.get("recipient")
+        if recip_val and amount_kobo:
+            spoken_text = build_transfer_confirmation_prompt(
+                int(amount_kobo), str(recip_val), lang=lang
+            )
+        elif amount_kobo:
+            naira = int(amount_kobo) / 100
+            spoken_text = f"Pay {naira:,.0f} Naira for {canonical_action_id.replace('_', ' ')}. Say 'confirm' to proceed, or 'cancel' to abort."
+        else:
+            spoken_text = f"Please confirm {canonical_action_id.replace('_', ' ')}."
+
+        return self._build_response(
+            outcome="action",
+            action_id=canonical_action_id,
+            params=verified_params,
+            missing_params=[],
+            confidence=llm_result.confidence,
+            message=None,
+            spoken_prompt=spoken_text,
+            language=lang,
+        )

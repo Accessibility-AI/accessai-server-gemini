@@ -68,9 +68,28 @@ STRICT_CONFIRMATION_PHRASES = {
 }
 
 NEGATION_TERMS = {
-    "not", "no", "don't", "dont", "never", "cancel", "stop", "abort",
-    "kọ́", "ko", "maṣe", "mase", "mba", "ọ dịghị", "o dighi", "ba",
-    "babu", "pas", "ne", "nicht", "nein", "kein"
+    "not",
+    "no",
+    "don't",
+    "dont",
+    "never",
+    "cancel",
+    "stop",
+    "abort",
+    "kọ́",
+    "ko",
+    "maṣe",
+    "mase",
+    "mba",
+    "ọ dịghị",
+    "o dighi",
+    "ba",
+    "babu",
+    "pas",
+    "ne",
+    "nicht",
+    "nein",
+    "kein",
 }
 
 
@@ -113,6 +132,7 @@ class ConfirmationService:
         params: dict[str, Any],
         lang: str = "en",
         confirmation_id: str | None = None,
+        sensitivity: str = "sensitive",
     ) -> dict[str, Any]:
         """Creates a pending confirmation record in SQLite."""
         session = await get_session(session_id)
@@ -140,9 +160,12 @@ class ConfirmationService:
             spoken_prompt=spoken,
             ttl_seconds=settings.CONFIRMATION_TOKEN_TTL_SECONDS,
             confirmation_id=confirmation_id,
+            sensitivity=sensitivity,
         )
 
-        iso_expires = datetime.fromtimestamp(record["expires_at"], UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        iso_expires = datetime.fromtimestamp(record["expires_at"], UTC).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
         record["params_sha256"] = p_hash
         record["expires_at_iso"] = iso_expires
         return record
@@ -172,7 +195,12 @@ class ConfirmationService:
         if session_id and record["session_id"] != session_id:
             return (
                 False,
-                {"error": {"code": "not_found", "message": "Confirmation does not belong to session"}},
+                {
+                    "error": {
+                        "code": "not_found",
+                        "message": "Confirmation does not belong to session",
+                    }
+                },
                 404,
             )
 
@@ -182,7 +210,12 @@ class ConfirmationService:
             await update_confirmation_status(confirmation_id, "expired")
             return (
                 False,
-                {"error": {"code": "confirmation_expired", "message": "Confirmation has expired"}},
+                {
+                    "error": {
+                        "code": "confirmation_expired",
+                        "message": "Confirmation has expired",
+                    }
+                },
                 410,
             )
 
@@ -190,14 +223,24 @@ class ConfirmationService:
         if record["status"] in ("confirmed", "cancelled"):
             return (
                 False,
-                {"error": {"code": "confirmation_used", "message": f"Confirmation already {record['status']}"}},
+                {
+                    "error": {
+                        "code": "confirmation_used",
+                        "message": f"Confirmation already {record['status']}",
+                    }
+                },
                 409,
             )
 
         if record["status"] != "pending":
             return (
                 False,
-                {"error": {"code": "confirmation_used", "message": f"Confirmation status is {record['status']}"}},
+                {
+                    "error": {
+                        "code": "confirmation_used",
+                        "message": f"Confirmation status is {record['status']}",
+                    }
+                },
                 409,
             )
 
@@ -206,25 +249,56 @@ class ConfirmationService:
         if not session:
             return (
                 False,
-                {"error": {"code": "session_expired", "message": "Session not found or expired"}},
+                {
+                    "error": {
+                        "code": "session_expired",
+                        "message": "Session not found or expired",
+                    }
+                },
                 401,
             )
 
         device_key = session.get("device_key")
 
-        # Security Bug 2: A sensitive action (transfer_money) always requires device key and valid auth
-        is_sensitive = record["action"] == "transfer_money" or settings.ENFORCE_DEVICE_AUTH or bool(device_key or auth)
+        # Sensitive actions (transfer_money, pay_bill, sensitivity=='sensitive')
+        # always require device authentication.
+        record_sensitivity = record.get("sensitivity", "sensitive")
+        action_name = record["action"].lower()
+        is_sensitive = (
+            record_sensitivity == "sensitive"
+            or action_name
+            in (
+                "transfer_money",
+                "pay_bill",
+                "send_money",
+                "send_cash",
+                "wire_transfer",
+                "pay",
+            )
+            or settings.ENFORCE_DEVICE_AUTH
+            or bool(device_key or auth)
+        )
         if is_sensitive:
             if not device_key:
                 return (
                     False,
-                    {"error": {"code": "auth_invalid", "message": "Device key not registered for session"}},
+                    {
+                        "error": {
+                            "code": "auth_invalid",
+                            "message": "Device key not registered for session",
+                        }
+                    },
                     401,
                 )
             if not auth:
                 return (
                     False,
-                    {"error": {"code": "auth_invalid", "message": "Device authentication required for sensitive action"}},
+                    {
+                        "error": {
+                            "code": "auth_invalid",
+                            "message": "Device authentication required for sensitive action",
+                        }
+                    },
                     401,
                 )
 
@@ -240,15 +314,27 @@ class ConfirmationService:
             if not is_valid:
                 return (
                     False,
-                    {"error": {"code": "auth_invalid", "message": f"Device auth verification failed: {err_reason}"}},
+                    {
+                        "error": {
+                            "code": "auth_invalid",
+                            "message": f"Device auth verification failed: {err_reason}",
+                        }
+                    },
                     401,
                 )
 
         # 6. Strict confirmation utterance check (NO LLM)
-        if method == "voice" and (not utterance or not is_strict_confirmation(utterance)):
+        if method == "voice" and (
+            not utterance or not is_strict_confirmation(utterance)
+        ):
             return (
                 False,
-                {"error": {"code": "not_a_confirmation", "message": "Utterance is not a strict confirmation phrase"}},
+                {
+                    "error": {
+                        "code": "not_a_confirmation",
+                        "message": "Utterance is not a strict confirmation phrase",
+                    }
+                },
                 422,
             )
 
@@ -258,7 +344,12 @@ class ConfirmationService:
         if not claimed:
             return (
                 False,
-                {"error": {"code": "confirmation_used", "message": "Confirmation already used"}},
+                {
+                    "error": {
+                        "code": "confirmation_used",
+                        "message": "Confirmation already used",
+                    }
+                },
                 409,
             )
 
@@ -287,11 +378,15 @@ class ConfirmationService:
                 else "en"
             )
         )
-        amount_kobo = record["params"].get("amount_minor") or record["params"].get("amount_kobo", 0)
+        amount_kobo = record["params"].get("amount_minor") or record["params"].get(
+            "amount_kobo", 0
+        )
         recipient = record["params"].get("recipient", "")
         spoken = build_confirmed_prompt(int(amount_kobo), str(recipient), lang=lang)
 
-        iso_exp = datetime.fromtimestamp(payload["exp"], UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        iso_exp = datetime.fromtimestamp(payload["exp"], UTC).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
 
         return (
             True,
@@ -314,17 +409,57 @@ class ConfirmationService:
         reason: str = "user_cancelled",
         utterance: str = "",
     ) -> tuple[bool, dict[str, Any], int]:
-        """Cancels a pending confirmation. Idempotent according to contract v1.1."""
+        """Cancels a pending confirmation. Idempotent according to contract v1.1.
+
+        Requires session_id. Returns 409 if transaction was already confirmed.
+        """
+        if not session_id:
+            return (
+                False,
+                {"error": {"code": "bad_request", "message": "session_id is required"}},
+                400,
+            )
+
         record = await get_confirmation(confirmation_id)
         if not record:
-            return False, {"error": {"code": "not_found", "message": "Confirmation not found"}}, 404
+            return (
+                False,
+                {"error": {"code": "not_found", "message": "Confirmation not found"}},
+                404,
+            )
 
-        if session_id and record["session_id"] != session_id:
-            return False, {"error": {"code": "not_found", "message": "Confirmation does not belong to session"}}, 404
+        if record["session_id"] != session_id:
+            return (
+                False,
+                {
+                    "error": {
+                        "code": "not_found",
+                        "message": "Confirmation does not belong to session",
+                    }
+                },
+                404,
+            )
+
+        # Cannot cancel an already confirmed transaction
+        if record["status"] == "confirmed":
+            return (
+                False,
+                {
+                    "error": {
+                        "code": "confirmation_used",
+                        "message": "Cannot cancel an already confirmed transaction",
+                    }
+                },
+                409,
+            )
 
         # If already cancelled, return success idempotently
         if record["status"] == "cancelled":
-            return True, {"status": "cancelled", "confirmation_id": confirmation_id}, 204
+            return (
+                True,
+                {"status": "cancelled", "confirmation_id": confirmation_id},
+                204,
+            )
 
         await update_confirmation_status(confirmation_id, "cancelled")
         lang = detect_language(utterance) if utterance else "en"
