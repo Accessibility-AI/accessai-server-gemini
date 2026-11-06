@@ -31,60 +31,60 @@ CRITICAL RULES:
 
 
 class AnthropicProvider(BaseLLMProvider):
-    def __init__(self, api_key: str | None = None, model: str | None = None):
-        self.api_key = api_key or settings.ANTHROPIC_API_KEY
-        self.model = model or settings.ANTHROPIC_MODEL
-        self.client = AsyncAnthropic(api_key=self.api_key) if self.api_key else None
+  def __init__(self, api_key: str | None = None, model: str | None = None):
+    self.api_key = api_key or settings.ANTHROPIC_API_KEY
+    self.model = model or settings.ANTHROPIC_MODEL
+    self.client = AsyncAnthropic(api_key=self.api_key) if self.api_key else None
 
-    async def interpret(
-        self,
-        utterance: str,
-        manifest: list[dict[str, Any]],
-        screen_descriptor: str | None = None,
-        dialog_state: dict[str, Any] | None = None,
-    ) -> LLMInterpretationResult:
-        if not self.client:
-            raise ValueError("Anthropic API key not configured")
+  async def interpret(
+    self,
+    utterance: str,
+    manifest: list[dict[str, Any]],
+    screen_descriptor: str | None = None,
+    dialog_state: dict[str, Any] | None = None,
+  ) -> LLMInterpretationResult:
+    if not self.client:
+      raise ValueError("Anthropic API key not configured")
 
-        tools = []
-        for action in manifest:
-            tools.append(
-                {
-                    "name": action["name"],
-                    "description": action.get("description", ""),
-                    "input_schema": action.get(
-                        "parameters", {"type": "object", "properties": {}}
-                    ),
-                }
-            )
+    tools = []
+    for action in manifest:
+      tools.append(
+        {
+          "name": action["name"],
+          "description": action.get("description", ""),
+          "input_schema": action.get(
+            "parameters", {"type": "object", "properties": {}}
+          ),
+        }
+      )
 
-        user_content = f"Utterance: {utterance}"
-        if screen_descriptor:
-            user_content += f"\nCurrent Screen: {screen_descriptor}"
-        if dialog_state:
-            user_content += f"\nDialog Context: {json.dumps(dialog_state)}"
+    user_content = f"Utterance: {utterance}"
+    if screen_descriptor:
+      user_content += f"\nCurrent Screen: {screen_descriptor}"
+    if dialog_state:
+      user_content += f"\nDialog Context: {json.dumps(dialog_state)}"
 
-        response = await self.client.messages.create(
-            model=self.model,
-            max_tokens=1024,
-            system=ANTHROPIC_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_content}],
-            tools=tools,
-        )
+    response = await self.client.messages.create(
+      model=self.model,
+      max_tokens=1024,
+      system=ANTHROPIC_SYSTEM_PROMPT,
+      messages=[{"role": "user", "content": user_content}],
+      tools=tools,
+    )
 
-        tool_calls_out = []
-        text_content = ""
-        for block in response.content:
-            if block.type == "tool_use":
-                tool_calls_out.append(ToolCall(name=block.name, arguments=block.input))
-            elif block.type == "text":
-                text_content += block.text
+    tool_calls_out = []
+    text_content = ""
+    for block in response.content:
+      if block.type == "tool_use":
+        tool_calls_out.append(ToolCall(name=block.name, arguments=block.input))
+      elif block.type == "text":
+        text_content += block.text
 
-        confidence = 0.96 if tool_calls_out else 0.5
+    confidence = 0.96 if tool_calls_out else 0.5
 
-        return LLMInterpretationResult(
-            tool_calls=tool_calls_out,
-            confidence=confidence,
-            text_content=text_content,
-            raw_response=response,
-        )
+    return LLMInterpretationResult(
+      tool_calls=tool_calls_out,
+      confidence=confidence,
+      text_content=text_content,
+      raw_response=response,
+    )

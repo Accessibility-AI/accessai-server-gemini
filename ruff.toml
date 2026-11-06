@@ -1,0 +1,5 @@
+indent-width = 2
+extend-exclude = ["*.md"]
+
+[format]
+indent-style = "space"
