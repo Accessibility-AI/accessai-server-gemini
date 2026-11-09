@@ -498,7 +498,7 @@
     let isBackendConnected = false;
     let currentLang = "pcm";
 
-    let API_BASE = localStorage.getItem("accessai_backend_url") || "http://localhost:8000";
+    let API_BASE = localStorage.getItem("accessai_backend_url") || (location.protocol.startsWith("http") ? location.origin : "http://localhost:8000");
     let allowFallback = localStorage.getItem("accessai_fallback") !== "false";
 
     const MANIFEST_ACTIONS = [

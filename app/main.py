@@ -103,12 +103,13 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
   )
 
 
+# Only explicitly listed origins (none by default); never with credentials
 app.add_middleware(
   CORSMiddleware,
-  allow_origins=["*"],
-  allow_credentials=True,
-  allow_methods=["*"],
-  allow_headers=["*"],
+  allow_origins=settings.CORS_ALLOW_ORIGINS,
+  allow_credentials=False,
+  allow_methods=["GET", "POST"],
+  allow_headers=["Content-Type", "X-AccessAI-App", "X-Request-Id"],
 )
 
 app.include_router(router)
@@ -122,8 +123,13 @@ async def health_check():
 @app.get("/", include_in_schema=False)
 @app.get("/demo", include_in_schema=False)
 async def serve_demo():
-  if DEMO_HTML.exists():
+  if settings.ENABLE_DEMO_PAGE and DEMO_HTML.exists():
     return FileResponse(DEMO_HTML, media_type="text/html")
   return JSONResponse(
-    {"message": "AccessAI Gemini Server running. Demo page not found."}
+    {
+      "service": "AccessAI Server",
+      "contract": "v1.1",
+      "docs": "/docs",
+      "health": "/health",
+    }
   )

@@ -277,19 +277,24 @@ async def test_canonical_hash_unicode_vector():
 
 
 @pytest.mark.asyncio
-async def test_session_duplicate_upsert_no_500():
-  """POST /v1/sessions: duplicate session_id returns 200 and does not raise 500 IntegrityError."""
+async def test_client_chosen_session_id_is_ignored():
+  """#33 / 5.5: POST /v1/sessions never accepts a client-chosen session_id; the server
+  always generates a fresh one, so a known id can't be claimed or re-registered."""
   await init_db()
   transport = ASGITransport(app=app)
   async with AsyncClient(transport=transport, base_url="http://test") as client:
     res1 = await client.post("/v1/sessions", json={"session_id": "custom-sid-123"})
     assert res1.status_code == 200
     assert "expires_at" in res1.json()
+    assert res1.json()["session_id"] != "custom-sid-123"
 
-    # Send same session_id again
+    # Sending the same id again creates another, distinct session (no 500, no reuse)
     res2 = await client.post("/v1/sessions", json={"session_id": "custom-sid-123"})
     assert res2.status_code == 200
-    assert res2.json()["session_id"] == "custom-sid-123"
+    assert res2.json()["session_id"] not in (
+      "custom-sid-123",
+      res1.json()["session_id"],
+    )
 
 
 @pytest.mark.asyncio
@@ -592,13 +597,13 @@ async def test_h1_cannot_replace_device_key_on_existing_session():
     sid = res1.json()["session_id"]
     assert res1.json()["device_key"]["kid"] == "victim-key-a"
 
-    # Attacker tries to hijack session by re-POSTing sid with key_b
+    # Attacker tries to hijack session by re-POSTing sid with key_b: the sid is
+    # ignored, so the attacker only gets a separate session of their own
     res2 = await client.post(
       "/v1/sessions", json={"session_id": sid, "device_key": key_b}
     )
     assert res2.status_code == 200
-    # Must retain original key_a!
-    assert res2.json()["device_key"]["kid"] == "victim-key-a"
+    assert res2.json()["session_id"] != sid
 
     # Victim creates a sensitive transfer confirmation
     p_res = await client.post(

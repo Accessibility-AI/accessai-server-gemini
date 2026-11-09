@@ -37,6 +37,15 @@ class Settings(BaseSettings):
   ED25519_PRIVATE_KEY_B64: str = ""
   JWKS_KID: str = "voice-intent-key-1"
 
+  # Browser access. The Android SDK doesn't use CORS; only list origins of web pages that
+  # must call this API from a browser, as a JSON list: '["https://demo.example.com"]'.
+  # Empty (default) = no cross-origin browser access. Credentials are never allowed.
+  CORS_ALLOW_ORIGINS: list[str] = []
+
+  # Serve the voice studio demo page at / and /demo. Off by default: every visitor's
+  # requests use this deployment's LLM quota.
+  ENABLE_DEMO_PAGE: bool = False
+
 
 _PROVIDER_API_KEY_FIELDS = {
   "gemini": "GEMINI_API_KEY",

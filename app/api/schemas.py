@@ -86,9 +86,8 @@ class SessionCreateRequest(BaseModel):
     }
   )
 
-  session_id: str | None = Field(
-    default=None, description="Optional client-chosen id; generated when omitted"
-  )
+  # No session_id: the server always generates it (a client-chosen id could be used to
+  # attach a device key to someone else's session). A sent session_id is ignored.
   app_id: str | None = Field(default=None, description="Host app's public identifier")
   locale: str | None = Field(
     default=None, description="BCP 47 locale hint, e.g. en-NG, yo-NG, ha-NG"
@@ -252,9 +251,8 @@ class PendingConfirmationRequest(BaseModel):
   params: dict[str, Any] = Field(
     description="RESOLVED values (beneficiary id, not name); exactly what the bank will receive"
   )
-  sensitivity: str | None = Field(
-    default="sensitive", description='"read" | "navigate" | "sensitive"'
-  )
+  # No sensitivity field: every pending confirmation requires device auth. A sent
+  # sensitivity is ignored.
 
 
 class PendingConfirmationResponse(BaseModel):
@@ -317,9 +315,7 @@ class ConfirmRequest(BaseModel):
     }
   )
 
-  session_id: str | None = Field(
-    default=None, description="Required: the session that created the confirmation"
-  )
+  session_id: str = Field(description="The session that created the confirmation")
   pending_id: str | None = Field(default=None, json_schema_extra=_LEGACY)
   confirmation_id: str | None = Field(default=None, json_schema_extra=_LEGACY)
   method: str | None = Field(
@@ -365,9 +361,7 @@ class CancelRequest(BaseModel):
     json_schema_extra={"examples": [{"session_id": EXAMPLE_SESSION_ID}]}
   )
 
-  session_id: str | None = Field(
-    default=None, description="Required: the session that created the confirmation"
-  )
+  session_id: str = Field(description="The session that created the confirmation")
   reason: str | None = "user_cancelled"
 
 

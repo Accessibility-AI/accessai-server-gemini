@@ -90,11 +90,11 @@ async def test_ndpa_cross_border_disclosure():
   await init_db()
   transport = ASGITransport(app=app)
   async with AsyncClient(transport=transport, base_url="http://test") as client:
-    await client.post("/v1/sessions", json={"session_id": "sess-ndpa-1"})
+    sid = (await client.post("/v1/sessions", json={})).json()["session_id"]
     res = await client.post(
       "/v1/interpret",
       json={
-        "session_id": "sess-ndpa-1",
+        "session_id": sid,
         "utterance": "abeg send 5k give David",
         "manifest": MANIFEST,
       },

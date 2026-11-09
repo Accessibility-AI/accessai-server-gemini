@@ -124,13 +124,13 @@ async def test_accept_sanitized_screen_and_number_removed():
   await init_db()
   transport = ASGITransport(app=app)
   async with AsyncClient(transport=transport, base_url="http://test") as client:
-    await client.post("/v1/sessions", json={"session_id": "sess-sec-4"})
+    sid = (await client.post("/v1/sessions", json={})).json()["session_id"]
 
     # 1. Screen formatted as login screen: {screen_id, title, sensitive: true}
     res = await client.post(
       "/v1/interpret",
       json={
-        "session_id": "sess-sec-4",
+        "session_id": sid,
         "utterance": "check my balance",
         "manifest": MANIFEST,
         "screen": {
@@ -147,7 +147,7 @@ async def test_accept_sanitized_screen_and_number_removed():
     res = await client.post(
       "/v1/interpret",
       json={
-        "session_id": "sess-sec-4",
+        "session_id": sid,
         "utterance": "send 5k to [number removed] for Chidi",
         "manifest": MANIFEST,
         "screen_descriptor": "Transfer Screen",
@@ -163,12 +163,12 @@ async def test_dialog_state_sanitization():
   await init_db()
   transport = ASGITransport(app=app)
   async with AsyncClient(transport=transport, base_url="http://test") as client:
-    await client.post("/v1/sessions", json={"session_id": "sess-sec-5"})
+    sid = (await client.post("/v1/sessions", json={})).json()["session_id"]
 
     res = await client.post(
       "/v1/interpret",
       json={
-        "session_id": "sess-sec-5",
+        "session_id": sid,
         "utterance": "send 10k give Fatima",
         "manifest": MANIFEST,
         "dialog_state": {

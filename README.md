@@ -172,7 +172,9 @@ Until the secret exists, the deploy job skips with a notice instead of failing. 
 **Notes:**
 - Keep it to one machine (`--ha=false`). Each machine would have its own SQLite file, so a confirmation started on one couldn't be completed on another.
 - When rotating the signing key, also change `JWKS_KID` in `fly.toml` so bank backends can tell the keys apart.
-- The service has no rate limiting yet, so set a spending cap on the Gemini API key before sharing the URL.
+- The service has no rate limiting of its own yet (#19), so set a spending cap on the Gemini API key before sharing the URL. **Enable billing** on the key's Google project: the free tier allows only ~15 requests/minute for the whole project, and every voice turn is one request. When the model's limit is hit, `/v1/interpret` returns `429 rate_limited` with `Retry-After`.
+- The demo page at `/` is **off** in production (`ENABLE_DEMO_PAGE` defaults to `false`), because every visitor would use this deployment's quota. Turn it on locally via `.env`, or on a separate deployment with its own key.
+- CORS is closed by default. The Android SDK doesn't need it. To let a web page on another origin call the API, set `CORS_ALLOW_ORIGINS` to a JSON list, e.g. `flyctl secrets set 'CORS_ALLOW_ORIGINS=["https://demo.example.com"]'`.
 
 ---
 

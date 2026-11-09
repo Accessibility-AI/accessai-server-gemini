@@ -115,6 +115,22 @@
               }
             }
           },
+          "429": {
+            "description": "`rate_limited`: The language model's rate limit was reached; retry after Retry-After seconds",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": {
+                    "code": "rate_limited",
+                    "message": "The language model's rate limit was reached; retry after Retry-After seconds"
+                  }
+                }
+              }
+            }
+          },
           "500": {
             "description": "`server`: Model or server failure",
             "content": {
@@ -341,18 +357,11 @@
           }
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/CancelRequest"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "title": "Req"
+                "$ref": "#/components/schemas/CancelRequest"
               }
             }
           }
@@ -469,16 +478,9 @@
       "CancelRequest": {
         "properties": {
           "session_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
             "title": "Session Id",
-            "description": "Required: the session that created the confirmation"
+            "description": "The session that created the confirmation"
           },
           "reason": {
             "anyOf": [
@@ -494,6 +496,9 @@
           }
         },
         "type": "object",
+        "required": [
+          "session_id"
+        ],
         "title": "CancelRequest",
         "examples": [
           {
@@ -504,16 +509,9 @@
       "ConfirmRequest": {
         "properties": {
           "session_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
             "title": "Session Id",
-            "description": "Required: the session that created the confirmation"
+            "description": "The session that created the confirmation"
           },
           "pending_id": {
             "anyOf": [
@@ -577,6 +575,9 @@
           }
         },
         "type": "object",
+        "required": [
+          "session_id"
+        ],
         "title": "ConfirmRequest",
         "examples": [
           {
@@ -1151,19 +1152,6 @@
             "type": "object",
             "title": "Params",
             "description": "RESOLVED values (beneficiary id, not name); exactly what the bank will receive"
-          },
-          "sensitivity": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sensitivity",
-            "description": "\"read\" | \"navigate\" | \"sensitive\"",
-            "default": "sensitive"
           }
         },
         "type": "object",
@@ -1284,18 +1272,6 @@
       },
       "SessionCreateRequest": {
         "properties": {
-          "session_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Session Id",
-            "description": "Optional client-chosen id; generated when omitted"
-          },
           "app_id": {
             "anyOf": [
               {
