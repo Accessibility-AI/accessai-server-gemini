@@ -159,6 +159,16 @@ flyctl deploy --ha=false
 
 **Check it:** `https://accessai-server-gemini.fly.dev/health` and `/.well-known/jwks.json`.
 
+**Continuous deployment:** after the first deploy, every push or merge to `main` deploys automatically. The `deploy` job in `.github/workflows/ci.yml` runs after lint and tests pass, then smoke-checks `/health` and the JWKS. PRs and other branches never deploy. Deploys appear under the repo's **production** environment.
+
+One-time setup, done by a **repo admin**: create a deploy token scoped to this app and store it as the `FLY_API_TOKEN` Actions secret. Piping it means the token is never printed:
+
+```bash
+flyctl tokens create deploy -a accessai-server-gemini -x 8760h | gh secret set FLY_API_TOKEN -R Accessibility-AI/accessai-server-gemini
+```
+
+Until the secret exists, the deploy job skips with a notice instead of failing. The token expires after a year (`-x 8760h`), so repeat this when it does.
+
 **Notes:**
 - Keep it to one machine (`--ha=false`). Each machine would have its own SQLite file, so a confirmation started on one couldn't be completed on another.
 - When rotating the signing key, also change `JWKS_KID` in `fly.toml` so bank backends can tell the keys apart.
