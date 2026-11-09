@@ -7,7 +7,8 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Superseded test runs are cancelled, but never a run on main (it may be deploying)
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   test:
@@ -53,3 +54,56 @@ jobs:
           name: pytest-results
           path: pytest-results.xml
           if-no-files-found: ignore
+
+  deploy:
+    name: Deploy to Fly.io
+    needs: test
+    # Only merges/pushes to main in the upstream repo; never PRs, branches or forks
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      github.repository == 'Accessibility-AI/accessai-server-gemini'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: https://accessai-server-gemini.fly.dev/docs
+    concurrency:
+      group: fly-deploy-production
+      cancel-in-progress: false
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      APP_URL: https://accessai-server-gemini.fly.dev
+    steps:
+      - name: Check deploy token
+        id: token
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::FLY_API_TOKEN secret is not set; skipping deploy. See README 'Continuous deployment'."
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.token.outputs.present == 'true'
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+        if: steps.token.outputs.present == 'true'
+        with:
+          version: 0.4.106
+
+      - name: Deploy
+        if: steps.token.outputs.present == 'true'
+        run: flyctl deploy --remote-only --ha=false --wait-timeout 5m
+
+      - name: Smoke check
+        if: steps.token.outputs.present == 'true'
+        run: |
+          for i in $(seq 1 12); do
+            if curl -fsS "$APP_URL/health" | grep -q '"healthy"'; then break; fi
+            echo "waiting for /health ($i)"; sleep 5
+          done
+          curl -fsS "$APP_URL/health"; echo
+          curl -fsS "$APP_URL/.well-known/jwks.json" | grep -q '"EdDSA"'
+          echo "Deployed ${GITHUB_SHA::7} to $APP_URL"
