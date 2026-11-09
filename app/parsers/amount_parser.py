@@ -1,6 +1,9 @@
 import re
 from decimal import Decimal, InvalidOperation
 
+# A comma between digits followed by exactly three digits is a thousands separator.
+THOUSANDS_SEPARATOR = re.compile(r"(?<=\d),(?=\d{3}(?!\d))")
+
 # Multilingual Word-to-number mapping (English, Yoruba, Igbo, Hausa, French, German, Spanish)
 ONES_AND_TEENS = {
   # English
@@ -355,6 +358,11 @@ def extract_amount_kobo(text: str) -> int | None:
   """
   if not text or not isinstance(text, str):
     return None
+
+  # 0. Drop thousands separators first ("5,000" -> "5000", "1,250,000" -> "1250000").
+  # Without this, the standalone-digit search in step 6 stops at the comma and reads
+  # "send 5,000 to David" as 5 naira. Android speech-to-text commonly emits "5,000".
+  text = THOUSANDS_SEPARATOR.sub("", text)
 
   # 1. Direct parse (works if text is an isolated amount, e.g. '5000 naira', '5k', '₦5,000')
   direct = _parse_direct_kobo(text)
