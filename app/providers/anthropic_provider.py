@@ -1,14 +1,16 @@
 import json
 from typing import Any
 
-from anthropic import AsyncAnthropic
+from anthropic import AsyncAnthropic, RateLimitError
 
 from app.config import settings
 from app.providers.base import (
   BaseLLMProvider,
   LLMInterpretationResult,
+  ProviderRateLimitedError,
   ToolCall,
   manifest_to_tool_schema,
+  retry_after_seconds,
 )
 
 ANTHROPIC_SYSTEM_PROMPT = """You are a multilingual voice intent interpreter for a blind or low-vision fintech Android app in Nigeria.
@@ -68,13 +70,19 @@ class AnthropicProvider(BaseLLMProvider):
     if dialog_state:
       user_content += f"\nDialog Context: {json.dumps(dialog_state)}"
 
-    response = await self.client.messages.create(
-      model=self.model,
-      max_tokens=1024,
-      system=ANTHROPIC_SYSTEM_PROMPT,
-      messages=[{"role": "user", "content": user_content}],
-      tools=tools,
-    )
+    try:
+      response = await self.client.messages.create(
+        model=self.model,
+        max_tokens=1024,
+        system=ANTHROPIC_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": user_content}],
+        tools=tools,
+      )
+    except RateLimitError as e:
+      raise ProviderRateLimitedError(
+        "anthropic",
+        retry_after=retry_after_seconds(e.response.headers.get("retry-after")),
+      ) from e
 
     tool_calls_out = []
     text_content = ""

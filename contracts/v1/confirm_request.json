@@ -48,17 +48,9 @@
   ],
   "properties": {
     "session_id": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Required: the session that created the confirmation",
-      "title": "Session Id"
+      "description": "The session that created the confirmation",
+      "title": "Session Id",
+      "type": "string"
     },
     "pending_id": {
       "anyOf": [
@@ -125,6 +117,9 @@
       "description": "Required for sensitive actions"
     }
   },
+  "required": [
+    "session_id"
+  ],
   "title": "ConfirmRequest",
   "type": "object"
 }

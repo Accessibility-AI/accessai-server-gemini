@@ -45,19 +45,6 @@
       "description": "RESOLVED values (beneficiary id, not name); exactly what the bank will receive",
       "title": "Params",
       "type": "object"
-    },
-    "sensitivity": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": "sensitive",
-      "description": "\"read\" | \"navigate\" | \"sensitive\"",
-      "title": "Sensitivity"
     }
   },
   "required": [

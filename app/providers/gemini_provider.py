@@ -10,11 +10,29 @@ from app.config import settings
 from app.providers.base import (
   BaseLLMProvider,
   LLMInterpretationResult,
+  ProviderRateLimitedError,
   ToolCall,
   manifest_to_tool_schema,
+  retry_after_seconds,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _gemini_retry_after(response: httpx.Response) -> int | None:
+  """Seconds to wait, from the Retry-After header or Google's RetryInfo detail."""
+  header = retry_after_seconds(response.headers.get("retry-after"))
+  if header is not None:
+    return header
+  try:
+    details = response.json().get("error", {}).get("details", [])
+  except (ValueError, AttributeError):
+    return None
+  for detail in details:
+    if isinstance(detail, dict) and detail.get("@type", "").endswith("RetryInfo"):
+      return retry_after_seconds(detail.get("retryDelay"))
+  return None
+
 
 GEMINI_SYSTEM_PROMPT = """You are a multilingual voice intent interpreter for a blind or low-vision fintech Android app in Nigeria.
 Your job is to parse the user's spoken utterance and invoke the matching tool from the available tools list.
@@ -202,21 +220,24 @@ class GeminiProvider(BaseLLMProvider):
         data = response.json()
         break
       except httpx.HTTPStatusError as e:
-        error_detail = getattr(e.response, "text", "")
-        logger.error(f"Gemini API error ({e.response.status_code}): {error_detail}")
-        if e.response.status_code in (429, 503) and attempt < max_retries:
+        status = e.response.status_code
+        # Full upstream body goes to the server log only, never to clients
+        logger.error(f"Gemini API error ({status}): {getattr(e.response, 'text', '')}")
+        if status in (429, 503) and attempt < max_retries:
           await asyncio.sleep(0.4)
           continue
-        raise RuntimeError(
-          f"Gemini API request failed with status {e.response.status_code}: {error_detail}"
-        ) from e
+        if status == 429:
+          raise ProviderRateLimitedError(
+            "gemini", retry_after=_gemini_retry_after(e.response)
+          ) from e
+        raise RuntimeError(f"Gemini API request failed with status {status}") from e
       except httpx.TimeoutException as e:
         logger.error(f"Gemini API request timed out: {e}")
         # Fail fast on timeout to respect blind user voice UX budget (~5s)
         raise TimeoutError("Gemini API request timed out after 5.0 seconds") from e
       except httpx.RequestError as e:
         logger.error(f"Gemini connection error: {e}")
-        raise RuntimeError(f"Failed to connect to Google Gemini API: {e}") from e
+        raise RuntimeError("Failed to connect to the Gemini API") from e
 
     # 4. Extract candidate parts
     tool_calls_out: list[ToolCall] = []

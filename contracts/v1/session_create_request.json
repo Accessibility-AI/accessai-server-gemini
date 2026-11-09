@@ -55,19 +55,6 @@
     }
   ],
   "properties": {
-    "session_id": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Optional client-chosen id; generated when omitted",
-      "title": "Session Id"
-    },
     "app_id": {
       "anyOf": [
         {

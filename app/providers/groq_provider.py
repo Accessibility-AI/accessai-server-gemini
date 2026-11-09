@@ -1,14 +1,16 @@
 import json
 from typing import Any
 
-from groq import AsyncGroq
+from groq import AsyncGroq, RateLimitError
 
 from app.config import settings
 from app.providers.base import (
   BaseLLMProvider,
   LLMInterpretationResult,
+  ProviderRateLimitedError,
   ToolCall,
   manifest_to_tool_schema,
+  retry_after_seconds,
 )
 
 SYSTEM_PROMPT = """You are a multilingual voice intent interpreter for a blind or low-vision fintech Android app in Nigeria.
@@ -76,13 +78,18 @@ class GroqProvider(BaseLLMProvider):
 
     messages.append({"role": "user", "content": "\n".join(user_context_parts)})
 
-    response = await self.client.chat.completions.create(
-      model=self.model,
-      messages=messages,
-      tools=tools or None,
-      tool_choice="auto",
-      temperature=0.0,
-    )
+    try:
+      response = await self.client.chat.completions.create(
+        model=self.model,
+        messages=messages,
+        tools=tools or None,
+        tool_choice="auto",
+        temperature=0.0,
+      )
+    except RateLimitError as e:
+      raise ProviderRateLimitedError(
+        "groq", retry_after=retry_after_seconds(e.response.headers.get("retry-after"))
+      ) from e
 
     choice = response.choices[0]
     tool_calls_out = []

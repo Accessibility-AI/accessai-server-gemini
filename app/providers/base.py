@@ -85,6 +85,30 @@ def manifest_to_tool_schema(
   )
 
 
+class ProviderRateLimitedError(Exception):
+  """The LLM provider refused the request because a quota or rate limit was hit.
+
+  Mapped to `429 rate_limited` for clients. The provider's own error body is logged,
+  never returned.
+  """
+
+  def __init__(self, provider: str, retry_after: int | None = None):
+    self.provider = provider
+    self.retry_after = retry_after
+    super().__init__(f"{provider} rate limit reached")
+
+
+def retry_after_seconds(value: Any) -> int | None:
+  """Parses a Retry-After header value or a Google retryDelay such as '55s'."""
+  if value is None:
+    return None
+  text = str(value).strip().removesuffix("s")
+  try:
+    return max(1, round(float(text)))
+  except ValueError:
+    return None
+
+
 class ToolCall(BaseModel):
   name: str
   arguments: dict[str, Any]
