@@ -7,7 +7,7 @@ from app.api.schemas import InterpretResponse
 from app.config import settings
 from app.parsers.amount_parser import parse_amount_to_kobo
 from app.parsers.language import detect_language
-from app.providers.base import BaseLLMProvider
+from app.providers.base import BaseLLMProvider, sanitize_tool_name
 from app.templates.speech import (
   build_balance_prompt,
   build_clarification_prompt,
@@ -203,11 +203,14 @@ class InterpreterService:
     # Build action maps
     actions_by_id = {}
     actions_by_name = {}
+    # Providers expose actions under sanitized tool names ("send money" -> "send_money")
+    actions_by_tool_name = {}
     for action in manifest:
       aid = action.get("id") or action.get("name")
       aname = action.get("name") or aid
       if aid:
         actions_by_id[aid] = action
+        actions_by_tool_name.setdefault(sanitize_tool_name(str(aid)), action)
       if aname:
         actions_by_name[aname] = action
 
@@ -311,7 +314,11 @@ class InterpreterService:
     tool_args = tool_call.arguments or {}
 
     # 3. Check if tool is allowed in actions
-    action_match = actions_by_id.get(tool_name) or actions_by_name.get(tool_name)
+    action_match = (
+      actions_by_id.get(tool_name)
+      or actions_by_name.get(tool_name)
+      or actions_by_tool_name.get(tool_name)
+    )
     if not action_match:
       msg = build_clarification_prompt("unknown_tool", lang=lang)
       return self._build_response(

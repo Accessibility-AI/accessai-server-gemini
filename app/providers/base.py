@@ -1,7 +1,88 @@
+import re
 from abc import ABC, abstractmethod
 from typing import Any
 
 from pydantic import BaseModel
+
+_INVALID_TOOL_NAME_CHARS = re.compile(r"[^a-zA-Z0-9_-]")
+_MAX_TOOL_NAME_LEN = 64
+
+# Contract v1.1 param types -> JSON Schema types
+_PARAM_JSON_TYPES = {
+  "amount_minor": "integer",
+  "integer": "integer",
+  "int": "integer",
+  "number": "number",
+  "float": "number",
+  "boolean": "boolean",
+  "string": "string",
+}
+
+
+def sanitize_tool_name(raw: str) -> str:
+  """Makes an action id safe as an LLM tool name (^[a-zA-Z0-9_-]{1,64}$).
+
+  Groq/OpenAI, Anthropic and Gemini all reject names with spaces, e.g. the SDK's
+  human-readable "send money". The interpreter maps sanitized names back to actions.
+  """
+  name = _INVALID_TOOL_NAME_CHARS.sub("_", (raw or "").strip())
+  return name[:_MAX_TOOL_NAME_LEN] or "action"
+
+
+def manifest_to_tool_schema(
+  action: dict[str, Any],
+) -> tuple[str, str, dict[str, Any]]:
+  """Converts one manifest action into (tool_name, description, JSON Schema parameters).
+
+  Accepts both the SDK contract v1.1 shape (`id` + `params` list) and the native
+  shape (`name` + JSON Schema `parameters`). Shared by every provider so they all
+  expose the same tools for the same manifest.
+
+  Actions with an amount param also get `amount_raw`, so the model can return the
+  amount exactly as spoken; the interpreter then parses it deterministically.
+  """
+  raw_id = action.get("id") or action.get("name") or "action"
+  tool_name = sanitize_tool_name(str(raw_id))
+  description = action.get("description") or action.get("name") or ""
+
+  if isinstance(action.get("parameters"), dict):
+    return tool_name, description, action["parameters"]
+
+  params = action.get("params")
+  if not isinstance(params, list):
+    return tool_name, description, {"type": "object", "properties": {}}
+
+  properties: dict[str, Any] = {}
+  required: list[str] = []
+  has_amount = False
+  for p in params:
+    if not isinstance(p, dict) or not p.get("name"):
+      continue
+    p_name = p["name"]
+    p_type = str(p.get("type", "string")).lower()
+    properties[p_name] = {
+      "type": _PARAM_JSON_TYPES.get(p_type, "string"),
+      "description": p.get("description") or f"Parameter {p_name}",
+    }
+    if p.get("required"):
+      required.append(p_name)
+    if p_type == "amount_minor" or "amount" in p_name.lower():
+      has_amount = True
+
+  if has_amount and "amount_raw" not in properties:
+    properties["amount_raw"] = {
+      "type": "string",
+      "description": (
+        "The amount exactly as the user said it (e.g. '5k', 'five thousand naira'). "
+        "Leave empty if the user did not say an amount."
+      ),
+    }
+
+  return (
+    tool_name,
+    description,
+    {"type": "object", "properties": properties, "required": required},
+  )
 
 
 class ToolCall(BaseModel):
