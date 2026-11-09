@@ -38,4 +38,33 @@ class Settings(BaseSettings):
   JWKS_KID: str = "voice-intent-key-1"
 
 
+_PROVIDER_API_KEY_FIELDS = {
+  "gemini": "GEMINI_API_KEY",
+  "groq": "GROQ_API_KEY",
+  "anthropic": "ANTHROPIC_API_KEY",
+}
+
+
+def production_config_errors(cfg: Settings) -> list[str]:
+  """Lists settings that are unsafe for a production deployment.
+
+  Checked at app startup (not import) so tests and tooling can still import settings.
+  A missing ED25519_PRIVATE_KEY_B64 is already refused by the JWS signer in production.
+  """
+  if cfg.APP_ENV != "production" or cfg.DEBUG:
+    return []
+
+  errors: list[str] = []
+  if cfg.LLM_PROVIDER == "mock":
+    errors.append(
+      "LLM_PROVIDER=mock is not allowed in production; "
+      "set it to gemini, groq or anthropic with a valid API key."
+    )
+  else:
+    key_field = _PROVIDER_API_KEY_FIELDS[cfg.LLM_PROVIDER]
+    if not getattr(cfg, key_field):
+      errors.append(f"{key_field} must be set when LLM_PROVIDER={cfg.LLM_PROVIDER}.")
+  return errors
+
+
 settings = Settings()

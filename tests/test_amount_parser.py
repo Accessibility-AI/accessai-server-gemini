@@ -27,6 +27,18 @@ def test_parse_shorthand_amounts():
   assert parse_amount_to_kobo("2m naira") == 200_000_000
 
 
+def test_parse_comma_thousands_inside_utterance():
+  """Regression: '5,000' without naira/₦ used to parse as ₦5 (500 kobo)."""
+  assert parse_amount_to_kobo("send 5,000 to David") == 500_000
+  assert parse_amount_to_kobo("transfer 1,500 to Amaka") == 150_000
+  assert parse_amount_to_kobo("give Amaka 1,500") == 150_000
+  assert parse_amount_to_kobo("send 15,000 to David") == 1_500_000
+  assert parse_amount_to_kobo("send 250,000 to David") == 25_000_000
+  assert parse_amount_to_kobo("send 1,250,000 naira") == 125_000_000
+  assert parse_amount_to_kobo("send ₦1,500 to Amaka") == 150_000
+  assert parse_amount_to_kobo("send N1,500 to Amaka") == 150_000
+
+
 def test_parse_currency_symbols():
   assert parse_amount_to_kobo("N5000") == 500_000
   assert parse_amount_to_kobo("₦5000") == 500_000

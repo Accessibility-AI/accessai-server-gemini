@@ -7,7 +7,12 @@ from typing import Any
 import httpx
 
 from app.config import settings
-from app.providers.base import BaseLLMProvider, LLMInterpretationResult, ToolCall
+from app.providers.base import (
+  BaseLLMProvider,
+  LLMInterpretationResult,
+  ToolCall,
+  manifest_to_tool_schema,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -96,58 +101,11 @@ def sanitize_schema_for_gemini(schema: dict[str, Any]) -> dict[str, Any]:
 
 def action_to_gemini_declaration(action: dict[str, Any]) -> dict[str, Any]:
   """Converts either OpenAPI format or contract v1.1 format into Gemini function declaration."""
-  fn_name = action.get("id") or action.get("name") or "action"
-  description = action.get("description", "")
-
-  if "parameters" in action and isinstance(action["parameters"], dict):
-    params_schema = sanitize_schema_for_gemini(action["parameters"])
-  elif "params" in action and isinstance(action["params"], list):
-    properties = {}
-    required = []
-    for p in action["params"]:
-      p_name = p.get("name", "")
-      p_type = p.get("type", "string")
-      p_desc = p.get("description", "")
-      if p.get("required"):
-        required.append(p_name)
-
-      if p_type in ("amount_minor", "integer", "int"):
-        g_type = "INTEGER"
-      elif p_type in ("number", "float"):
-        g_type = "NUMBER"
-      elif p_type == "boolean":
-        g_type = "BOOLEAN"
-      else:
-        g_type = "STRING"
-
-      properties[p_name] = {
-        "type": g_type,
-        "description": p_desc or f"Parameter {p_name}",
-      }
-
-    # For transfer actions, also accept amount_raw to assist with deterministic speech parsing
-    has_amount = any(
-      p.get("type") == "amount_minor" or "amount" in p.get("name", "").lower()
-      for p in action["params"]
-    )
-    if has_amount and "amount_raw" not in properties:
-      properties["amount_raw"] = {
-        "type": "STRING",
-        "description": "Raw spoken amount phrase (e.g. '5k', 'five thousand naira')",
-      }
-
-    params_schema = {
-      "type": "OBJECT",
-      "properties": properties,
-      "required": required,
-    }
-  else:
-    params_schema = {"type": "OBJECT", "properties": {}}
-
+  fn_name, description, params_schema = manifest_to_tool_schema(action)
   return {
     "name": fn_name,
     "description": description,
-    "parameters": params_schema,
+    "parameters": sanitize_schema_for_gemini(params_schema),
   }
 
 

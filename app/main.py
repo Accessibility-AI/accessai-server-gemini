@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
 from app.api.routes import router
-from app.config import settings
+from app.config import production_config_errors, settings
 from app.db.database import init_db
 from app.providers.gemini_provider import close_shared_client
 
@@ -15,6 +15,11 @@ DEMO_HTML = Path(__file__).parent.parent / "demo" / "index.html"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+  # Refuse to serve with unsafe production settings (e.g. the mock LLM, missing API key)
+  config_errors = production_config_errors(settings)
+  if config_errors:
+    raise RuntimeError("Refusing to start: " + " ".join(config_errors))
+
   # Initialize DB tables with WAL mode
   await init_db()
   yield

@@ -4,7 +4,12 @@ from typing import Any
 from anthropic import AsyncAnthropic
 
 from app.config import settings
-from app.providers.base import BaseLLMProvider, LLMInterpretationResult, ToolCall
+from app.providers.base import (
+  BaseLLMProvider,
+  LLMInterpretationResult,
+  ToolCall,
+  manifest_to_tool_schema,
+)
 
 ANTHROPIC_SYSTEM_PROMPT = """You are a multilingual voice intent interpreter for a blind or low-vision fintech Android app in Nigeria.
 Your job is to parse the user's spoken utterance and invoke the matching tool from the available tools list.
@@ -48,13 +53,12 @@ class AnthropicProvider(BaseLLMProvider):
 
     tools = []
     for action in manifest:
+      tool_name, description, input_schema = manifest_to_tool_schema(action)
       tools.append(
         {
-          "name": action["name"],
-          "description": action.get("description", ""),
-          "input_schema": action.get(
-            "parameters", {"type": "object", "properties": {}}
-          ),
+          "name": tool_name,
+          "description": description,
+          "input_schema": input_schema,
         }
       )
 
