@@ -4,7 +4,7 @@
       "properties": {
         "method": {
           "default": "biometric",
-          "description": "Device unlock method: 'biometric' or 'device_credential'",
+          "description": "Device unlock method: 'biometric' or 'device_credential'. Becomes the token's amr claim",
           "title": "Method",
           "type": "string"
         },
@@ -33,6 +33,19 @@
       "type": "object"
     }
   },
+  "examples": [
+    {
+      "auth": {
+        "alg": "ES256",
+        "kid": "device-1",
+        "method": "biometric",
+        "signature": "MEUCIQD…"
+      },
+      "method": "voice",
+      "session_id": "s_8f2c41d0a7b94e31",
+      "utterance": "confirm transfer"
+    }
+  ],
   "properties": {
     "session_id": {
       "anyOf": [
@@ -44,6 +57,7 @@
         }
       ],
       "default": null,
+      "description": "Required: the session that created the confirmation",
       "title": "Session Id"
     },
     "pending_id": {
@@ -56,6 +70,7 @@
         }
       ],
       "default": null,
+      "deprecated": true,
       "title": "Pending Id"
     },
     "confirmation_id": {
@@ -68,6 +83,7 @@
         }
       ],
       "default": null,
+      "deprecated": true,
       "title": "Confirmation Id"
     },
     "method": {
@@ -80,6 +96,7 @@
         }
       ],
       "default": "voice",
+      "description": "\"voice\" (utterance is checked against a strict phrase list) or \"touch\"",
       "title": "Method"
     },
     "utterance": {
@@ -92,6 +109,7 @@
         }
       ],
       "default": null,
+      "description": "For voice: e.g. \"confirm\" or \"confirm transfer\"",
       "title": "Utterance"
     },
     "auth": {
@@ -103,7 +121,8 @@
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "description": "Required for sensitive actions"
     }
   },
   "title": "ConfirmRequest",

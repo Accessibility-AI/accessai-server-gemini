@@ -1,21 +1,115 @@
 {
+  "examples": [
+    {
+      "actions": [
+        {
+          "description": "Send money to a saved beneficiary",
+          "examples": [
+            "send 5000 naira to David"
+          ],
+          "id": "transfer_money",
+          "name": "send money",
+          "params": [
+            {
+              "description": "Beneficiary name as the user said it",
+              "name": "recipient",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "description": "Amount in kobo",
+              "name": "amount_minor",
+              "required": true,
+              "type": "amount_minor"
+            }
+          ],
+          "requires_confirmation": true,
+          "sensitivity": "sensitive"
+        }
+      ],
+      "dialog": {
+        "awaiting": "none",
+        "filled_params": {},
+        "last_system_message": null,
+        "missing_params": [],
+        "pending_action_id": null
+      },
+      "locale": "en-NG",
+      "screen": {
+        "elements": [],
+        "screen_id": "home",
+        "summary": null,
+        "title": "Home"
+      },
+      "session_id": "s_8f2c41d0a7b94e31",
+      "text": "Send 5,000 to David"
+    }
+  ],
   "properties": {
     "session_id": {
+      "description": "From POST /v1/sessions",
       "title": "Session Id",
       "type": "string"
     },
+    "text": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The user's utterance",
+      "title": "Text"
+    },
     "utterance": {
-      "title": "Utterance",
-      "type": "string"
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "deprecated": true,
+      "title": "Utterance"
+    },
+    "actions": {
+      "anyOf": [
+        {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The host's allowlist. The ONLY actions that may be returned",
+      "title": "Actions"
     },
     "manifest": {
-      "description": "Allowed actions exposed by the host Android app",
-      "items": {
-        "additionalProperties": true,
-        "type": "object"
-      },
-      "title": "Manifest",
-      "type": "array"
+      "anyOf": [
+        {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "deprecated": true,
+      "title": "Manifest"
     },
     "screen_descriptor": {
       "anyOf": [
@@ -27,9 +121,15 @@
         }
       ],
       "default": null,
+      "deprecated": true,
       "title": "Screen Descriptor"
     },
     "screen": {
+      "default": null,
+      "description": "Current screen descriptor (optional)",
+      "title": "Screen"
+    },
+    "dialog": {
       "anyOf": [
         {
           "additionalProperties": true,
@@ -40,14 +140,12 @@
           "type": "array"
         },
         {
-          "type": "string"
-        },
-        {
           "type": "null"
         }
       ],
       "default": null,
-      "title": "Screen"
+      "description": "What AccessAI is in the middle of, if anything",
+      "title": "Dialog"
     },
     "dialog_state": {
       "anyOf": [
@@ -56,17 +154,33 @@
           "type": "object"
         },
         {
+          "items": {},
+          "type": "array"
+        },
+        {
           "type": "null"
         }
       ],
       "default": null,
+      "deprecated": true,
       "title": "Dialog State"
+    },
+    "locale": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "BCP 47 locale hint",
+      "title": "Locale"
     }
   },
   "required": [
-    "session_id",
-    "utterance",
-    "manifest"
+    "session_id"
   ],
   "title": "InterpretRequest",
   "type": "object"

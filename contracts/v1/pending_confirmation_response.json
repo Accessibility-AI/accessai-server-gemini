@@ -1,42 +1,102 @@
 {
+  "examples": [
+    {
+      "expires_at": "2026-11-09T12:01:00Z",
+      "params_sha256": "b729a280eabf6c63b6a6b889bfa1b26d4dad23286f2e3a36b98028e35879cd47",
+      "pending_id": "pc_3b9e7a10c4d2"
+    }
+  ],
   "properties": {
-    "confirmation_id": {
-      "title": "Confirmation Id",
+    "pending_id": {
+      "title": "Pending Id",
       "type": "string"
+    },
+    "params_sha256": {
+      "description": "Lowercase hex SHA-256 of the canonical JSON of params. The SDK must check it matches its own",
+      "title": "Params Sha256",
+      "type": "string"
+    },
+    "expires_at": {
+      "description": "ISO 8601 UTC; 60 seconds by default",
+      "title": "Expires At",
+      "type": "string"
+    },
+    "confirmation_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "deprecated": true,
+      "title": "Confirmation Id"
     },
     "session_id": {
-      "title": "Session Id",
-      "type": "string"
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "deprecated": true,
+      "title": "Session Id"
     },
     "action": {
-      "title": "Action",
-      "type": "string"
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "deprecated": true,
+      "title": "Action"
     },
     "params": {
-      "additionalProperties": true,
-      "title": "Params",
-      "type": "object"
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "deprecated": true,
+      "title": "Params"
     },
     "status": {
+      "default": "pending",
+      "deprecated": true,
       "title": "Status",
       "type": "string"
     },
     "spoken_prompt": {
-      "title": "Spoken Prompt",
-      "type": "string"
-    },
-    "expires_at": {
-      "title": "Expires At",
-      "type": "integer"
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "deprecated": true,
+      "title": "Spoken Prompt"
     }
   },
   "required": [
-    "confirmation_id",
-    "session_id",
-    "action",
-    "params",
-    "status",
-    "spoken_prompt",
+    "pending_id",
+    "params_sha256",
     "expires_at"
   ],
   "title": "PendingConfirmationResponse",

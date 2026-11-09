@@ -3,11 +3,13 @@
     "DeviceKey": {
       "properties": {
         "kid": {
+          "description": "Key ID; confirm requests must sign with the same kid",
           "title": "Kid",
           "type": "string"
         },
         "alg": {
           "default": "ES256",
+          "description": "Only ES256 (ECDSA P-256) is accepted",
           "title": "Alg",
           "type": "string"
         },
@@ -41,12 +43,27 @@
       "type": "object"
     }
   },
+  "examples": [
+    {
+      "app_id": "accesspay-demo",
+      "expires_at": "2026-11-10T12:00:00Z",
+      "locale": "en-NG",
+      "session_id": "s_8f2c41d0a7b94e31",
+      "status": "active"
+    }
+  ],
   "properties": {
     "session_id": {
       "title": "Session Id",
       "type": "string"
     },
+    "expires_at": {
+      "description": "ISO 8601 UTC; sessions last 24 hours",
+      "title": "Expires At",
+      "type": "string"
+    },
     "status": {
+      "default": "active",
       "title": "Status",
       "type": "string"
     },
@@ -91,19 +108,33 @@
       "type": "object"
     },
     "created_at": {
-      "title": "Created At",
-      "type": "integer"
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Created At"
     },
     "updated_at": {
-      "title": "Updated At",
-      "type": "integer"
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Updated At"
     }
   },
   "required": [
     "session_id",
-    "status",
-    "created_at",
-    "updated_at"
+    "expires_at"
   ],
   "title": "SessionResponse",
   "type": "object"

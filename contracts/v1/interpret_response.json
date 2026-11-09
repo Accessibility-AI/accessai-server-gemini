@@ -1,8 +1,99 @@
 {
+  "examples": [
+    {
+      "action_id": "transfer_money",
+      "confidence": 0.93,
+      "control": null,
+      "message": null,
+      "missing_params": [],
+      "outcome": "action",
+      "params": {
+        "amount_minor": 500000,
+        "recipient": "David"
+      },
+      "request_id": "r_5d1e9c"
+    }
+  ],
   "properties": {
-    "type": {
-      "title": "Type",
+    "request_id": {
+      "title": "Request Id",
       "type": "string"
+    },
+    "outcome": {
+      "default": "action",
+      "description": "\"action\" | \"clarify\" | \"unsupported\" | \"control\"",
+      "title": "Outcome",
+      "type": "string"
+    },
+    "action_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "For action: always one of request.actions[].id",
+      "title": "Action Id"
+    },
+    "params": {
+      "additionalProperties": true,
+      "description": "Only params the user actually said; amount_minor is an integer in kobo",
+      "title": "Params",
+      "type": "object"
+    },
+    "missing_params": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Missing Params",
+      "type": "array"
+    },
+    "control": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "For control: cancel | stop | repeat | next | previous | help | describe_screen",
+      "title": "Control"
+    },
+    "message": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "For clarify/unsupported: short spoken text",
+      "title": "Message"
+    },
+    "confidence": {
+      "description": "0..1; the SDK treats low values as unclear",
+      "title": "Confidence",
+      "type": "number"
+    },
+    "type": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "deprecated": true,
+      "title": "Type"
     },
     "intent": {
       "anyOf": [
@@ -14,28 +105,21 @@
         }
       ],
       "default": null,
+      "deprecated": true,
       "title": "Intent"
     },
-    "params": {
+    "spoken_prompt": {
       "anyOf": [
         {
-          "additionalProperties": true,
-          "type": "object"
+          "type": "string"
         },
         {
           "type": "null"
         }
       ],
       "default": null,
-      "title": "Params"
-    },
-    "confidence": {
-      "title": "Confidence",
-      "type": "number"
-    },
-    "spoken_prompt": {
-      "title": "Spoken Prompt",
-      "type": "string"
+      "deprecated": true,
+      "title": "Spoken Prompt"
     },
     "clarification_reason": {
       "anyOf": [
@@ -47,10 +131,12 @@
         }
       ],
       "default": null,
+      "deprecated": true,
       "title": "Clarification Reason"
     },
     "language": {
       "default": "en",
+      "deprecated": true,
       "title": "Language",
       "type": "string"
     },
@@ -64,6 +150,7 @@
         }
       ],
       "default": null,
+      "deprecated": true,
       "title": "Provider"
     },
     "processing_region": {
@@ -76,6 +163,7 @@
         }
       ],
       "default": null,
+      "deprecated": true,
       "title": "Processing Region"
     },
     "data_processing_notice": {
@@ -88,13 +176,13 @@
         }
       ],
       "default": null,
+      "deprecated": true,
       "title": "Data Processing Notice"
     }
   },
   "required": [
-    "type",
-    "confidence",
-    "spoken_prompt"
+    "request_id",
+    "confidence"
   ],
   "title": "InterpretResponse",
   "type": "object"

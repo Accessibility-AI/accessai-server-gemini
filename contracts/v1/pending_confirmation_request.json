@@ -1,22 +1,67 @@
 {
+  "examples": [
+    {
+      "action_id": "transfer_money",
+      "params": {
+        "amount_minor": 500000,
+        "recipient": "ben_001"
+      },
+      "session_id": "s_8f2c41d0a7b94e31"
+    }
+  ],
   "properties": {
     "session_id": {
       "title": "Session Id",
       "type": "string"
     },
+    "action_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The action being confirmed",
+      "title": "Action Id"
+    },
     "action": {
-      "title": "Action",
-      "type": "string"
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "deprecated": true,
+      "title": "Action"
     },
     "params": {
       "additionalProperties": true,
+      "description": "RESOLVED values (beneficiary id, not name); exactly what the bank will receive",
       "title": "Params",
       "type": "object"
+    },
+    "sensitivity": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": "sensitive",
+      "description": "\"read\" | \"navigate\" | \"sensitive\"",
+      "title": "Sensitivity"
     }
   },
   "required": [
     "session_id",
-    "action",
     "params"
   ],
   "title": "PendingConfirmationRequest",

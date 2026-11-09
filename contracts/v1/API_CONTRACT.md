@@ -1,9 +1,24 @@
-# AccessAI service API — contract v1
+# AccessAI service API — contract v1.1
+
+**Version 1.1** · [Changelog](#changelog)
 
 This is the contract between the SDK (`accessai-core`, package `com.accessai.core.protocol`) and the AI service
-(`accessai-server`). Change both together and bump the version.
+(`accessai-server-gemini`). Change both together and bump the version.
+
+This document defines **behaviour**: what the service may return, how hashes and signatures are built, and what the
+bank must check. The exact **shapes** of each request and response are in the generated spec, which CI keeps in step
+with the code:
+
+| | Where |
+|---|---|
+| OpenAPI 3.1 spec | [`openapi.json`](openapi.json) |
+| JSON Schema per request/response (for SDK contract tests) | `*_request.json`, `*_response.json`, `error_response.json` in this folder |
+| Interactive docs (live server) | `<server>/docs` and `<server>/redoc` |
+
+Regenerate the spec with `python scripts/export_contracts.py`. The test suite fails if it is out of date.
 
 - Base URL: configured by the host app (`AccessAIConfig.serverUrl`). HTTPS only in production.
+  Demo server: `https://accessai-server-gemini.fly.dev`.
 - All bodies are JSON, `snake_case`. Unknown fields must be ignored by both sides.
 - Every request carries `X-AccessAI-App: <app_id>` (public identifier, not a secret) and `X-Request-Id: <uuid>`.
 - The SDK never retries a request automatically.
@@ -18,8 +33,9 @@ Any non-2xx response should have this body:
 
 | code | HTTP | When |
 |---|---|---|
-| `bad_request` | 400 | Schema validation failed |
+| `bad_request` | 400 | Schema validation failed, a required field is missing, or the utterance contains a 10+ digit run (e.g. an account number) |
 | `session_expired` | 401 | Unknown or expired `session_id` (the SDK creates a new session and retries `/interpret` once) |
+| `auth_invalid` | 401 | `/confirm` on a sensitive action without a valid device signature (see `/confirm`) |
 | `not_found` | 404 | Unknown `pending_id`, or it belongs to another session |
 | `not_a_confirmation` | 422 | `/confirm` with `method: "voice"` whose utterance is not an exact confirmation |
 | `confirmation_expired` | 410 | `/confirm` after `expires_at` |
@@ -31,10 +47,22 @@ Any non-2xx response should have this body:
 
 ```json
 // request
-{ "app_id": "accesspay-demo", "locale": "en-NG" }
+{
+  "app_id": "accesspay-demo",
+  "locale": "en-NG",
+  "device_key": {                                // v1.1: required to confirm sensitive actions
+    "kid": "device-1",
+    "alg": "ES256",
+    "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE…",   // base64 SubjectPublicKeyInfo DER, EC P-256
+    "attestation_chain": []                      // optional base64 DER X.509 certificates
+  }
+}
 // response 200
 { "session_id": "s_8f2c…", "expires_at": "2026-10-29T13:00:00Z" }
 ```
+
+Sessions last 24 hours. The `device_key` is the Android Keystore public key that signs confirmations; without it,
+sensitive actions can never be confirmed in this session.
 
 ## POST /v1/interpret
 
@@ -126,15 +154,37 @@ The SDK refuses to continue if the server's hash differs from its own. Suggested
 
 ```json
 // request
-{ "session_id": "s_…", "method": "voice", "utterance": "confirm transfer" }   // or { "method": "touch" }
+{
+  "session_id": "s_…",
+  "method": "voice",                             // or "touch" (no utterance)
+  "utterance": "confirm transfer",
+  "auth": {                                      // v1.1: required for sensitive actions
+    "method": "biometric",                       // or "device_credential"; becomes the token's amr claim
+    "kid": "device-1",                           // must equal the session's device_key.kid
+    "alg": "ES256",
+    "signature": "MEUCIQD…"                      // base64 DER ECDSA signature, see below
+  }
+}
 // response 200
 { "status": "confirmed", "token": "<compact JWS>", "nonce": "8b0e…", "expires_at": "2026-10-29T12:01:00Z" }
 ```
 
+- `session_id` is required and must be the session that created the pending confirmation (otherwise `not_found`).
 - For `voice`, re-check the utterance with a **strict, deterministic** grammar: accept only phrases like
   `confirm`, `confirm transfer`, `i confirm`, `yes confirm`. Reject anything containing a negation. No model.
+  `touch` skips the phrase check but not the device signature.
+- **Device signature (v1.1).** A pending confirmation is sensitive when its `sensitivity` is `"sensitive"` (the
+  default) or it is a money-moving action such as `transfer_money` or `pay_bill`. Once a session has registered a
+  `device_key`, every confirmation in it is treated this way. Such requests must carry `auth`, signed by the session's device key after the user unlocks it, over the UTF-8 bytes of:
+
+  ```
+  accessai-auth-v1|{session_id}|{pending_id}|{action_id}|{params_sha256}
+  ```
+
+  Signature: ECDSA P-256 with SHA-256, DER encoded, then base64. Missing or invalid `auth` returns `auth_invalid`.
 - Single use: a second call returns `confirmation_used`.
-- `token` is a compact JWS signed with **EdDSA (Ed25519)**. Claims:
+- `token` is a compact JWS signed with **EdDSA (Ed25519)**. The header's `kid` names the JWKS key that signed it.
+  Claims:
 
 | claim | meaning |
 |---|---|
@@ -144,10 +194,12 @@ The SDK refuses to continue if the server's hash differs from its own. Suggested
 | `ph` | `params_sha256` |
 | `jti` | nonce (also returned as `nonce`) |
 | `iat`, `exp` | issued-at, expiry (≤ 60 s) |
+| `amr` | v1.1: how the device was unlocked, e.g. `["biometric"]`; present when `auth` was sent |
 
 ## POST /v1/confirmations/{pending_id}/cancel
 
-`{ "session_id": "s_…" }` → `204`. Idempotent.
+`{ "session_id": "s_…" }` → `204`. Idempotent: cancelling twice returns `204`. Cancelling one that was already
+confirmed returns `confirmation_used`.
 
 ## GET /.well-known/jwks.json
 
@@ -160,3 +212,20 @@ executing a sensitive action:
 4. reject a `jti` it has already seen (use it as the idempotency key).
 
 Tokens from the SDK's offline `LocalRulesBackend` start with `dev-unsigned.` and must always be rejected in production.
+
+## Changelog
+
+### 1.1
+- **Device-bound confirmation.** `POST /v1/sessions` takes a `device_key` (ES256 public key), and
+  `/confirm` for sensitive actions requires an `auth` signature over
+  `accessai-auth-v1|{session_id}|{pending_id}|{action_id}|{params_sha256}`. New error `auth_invalid` (401).
+- `session_id` is required on `/confirm` and `/cancel`, and must match the session that created the confirmation.
+- Tokens gain an `amr` claim. The JWS header carries the signing key's `kid`.
+- Cancelling an already-confirmed confirmation returns `confirmation_used`.
+- Schema validation errors use the error envelope (`400 bad_request`), not a framework default.
+- The spec is generated from the code (`openapi.json` and the per-model JSON schemas) and checked in CI.
+- Deprecated, not part of the contract: the routes `/v1/confirm`, `/v1/confirmations/confirm` and
+  `/v1/confirmations/pending` (being removed in #25), and the request/response fields marked `deprecated` in the spec.
+
+### 1.0
+- Initial contract: sessions, interpret, pending confirmations, strict voice confirmation, EdDSA tokens, JWKS.
