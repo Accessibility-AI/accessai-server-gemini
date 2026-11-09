@@ -1,0 +1,38 @@
+{
+  "$defs": {
+    "ErrorDetail": {
+      "properties": {
+        "code": {
+          "description": "Machine-readable error code; see the error table in API_CONTRACT.md",
+          "examples": [
+            "not_a_confirmation"
+          ],
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "description": "Human-readable detail for logs; never shown to users",
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "title": "ErrorDetail",
+      "type": "object"
+    }
+  },
+  "description": "Body of every non-2xx response.",
+  "properties": {
+    "error": {
+      "$ref": "#/$defs/ErrorDetail"
+    }
+  },
+  "required": [
+    "error"
+  ],
+  "title": "ErrorResponse",
+  "type": "object"
+}

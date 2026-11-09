@@ -1,5 +1,23 @@
 {
+  "examples": [
+    {
+      "session_id": "s_8f2c41d0a7b94e31"
+    }
+  ],
   "properties": {
+    "session_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Required: the session that created the confirmation",
+      "title": "Session Id"
+    },
     "reason": {
       "anyOf": [
         {

@@ -3,11 +3,13 @@
     "DeviceKey": {
       "properties": {
         "kid": {
+          "description": "Key ID; confirm requests must sign with the same kid",
           "title": "Kid",
           "type": "string"
         },
         "alg": {
           "default": "ES256",
+          "description": "Only ES256 (ECDSA P-256) is accepted",
           "title": "Alg",
           "type": "string"
         },
@@ -41,6 +43,17 @@
       "type": "object"
     }
   },
+  "examples": [
+    {
+      "app_id": "accesspay-demo",
+      "device_key": {
+        "alg": "ES256",
+        "kid": "device-1",
+        "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE…"
+      },
+      "locale": "en-NG"
+    }
+  ],
   "properties": {
     "session_id": {
       "anyOf": [
@@ -52,6 +65,7 @@
         }
       ],
       "default": null,
+      "description": "Optional client-chosen id; generated when omitted",
       "title": "Session Id"
     },
     "app_id": {
@@ -64,6 +78,7 @@
         }
       ],
       "default": null,
+      "description": "Host app's public identifier",
       "title": "App Id"
     },
     "locale": {
@@ -76,6 +91,7 @@
         }
       ],
       "default": null,
+      "description": "BCP 47 locale hint, e.g. en-NG, yo-NG, ha-NG",
       "title": "Locale"
     },
     "device_key": {
@@ -87,7 +103,8 @@
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "description": "Android Keystore public key. Required to confirm sensitive actions"
     },
     "metadata": {
       "anyOf": [

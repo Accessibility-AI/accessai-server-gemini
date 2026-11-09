@@ -2,13 +2,17 @@
   "openapi": "3.1.0",
   "info": {
     "title": "AccessAI Server",
-    "description": "AccessAI AI Service: Developer-approved voice accessibility layer for blind and low-vision fintech Android apps",
-    "version": "1.0.0"
+    "description": "\nAI service for the AccessAI Android SDK: a voice accessibility layer for blind and\nlow-vision users of fintech apps. Implements **contract v1.1**.\n\nThe service suggests actions and issues short-lived signed confirmation tokens.\n**It never moves money.** The bank verifies each token before executing anything.\n\n- Contract (behaviour rules, hashing, token claims): `contracts/v1/API_CONTRACT.md`\n- Machine-readable spec: `contracts/v1/openapi.json` and the per-model JSON schemas beside it\n\n**SDK flow:** `POST /v1/sessions` → `POST /v1/interpret` (repeat per utterance) →\n`POST /v1/confirmations` → `POST /v1/confirmations/{id}/confirm` (or `/cancel`).\nThe host's bank backend verifies the returned token with `GET /.well-known/jwks.json`.\n\nEvery non-2xx response has the body `{\"error\": {\"code\": \"...\", \"message\": \"...\"}}`.\n",
+    "version": "1.1.0"
   },
   "paths": {
     "/v1/sessions": {
       "post": {
-        "summary": "Create New Session",
+        "tags": [
+          "SDK (contract v1.1)"
+        ],
+        "summary": "Start a session",
+        "description": "Creates a session (valid 24 hours). Register the device's Android Keystore public key\nhere (`device_key`): it is required later to confirm sensitive actions.",
         "operationId": "create_new_session_v1_sessions_post",
         "requestBody": {
           "content": {
@@ -21,7 +25,7 @@
           "required": true
         },
         "responses": {
-          "201": {
+          "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
@@ -31,12 +35,18 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
+          "400": {
+            "description": "`bad_request`: Missing or invalid field",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_request",
+                    "message": "Missing or invalid field"
+                  }
                 }
               }
             }
@@ -46,7 +56,11 @@
     },
     "/v1/interpret": {
       "post": {
-        "summary": "Interpret Utterance",
+        "tags": [
+          "SDK (contract v1.1)"
+        ],
+        "summary": "Interpret one utterance",
+        "description": "Turns what the user said into a structured suggestion. **Never executes anything.**\n\n`action_id` is always one of `request.actions[].id`. Params the user didn't say are left\nout, never guessed. `amount_minor` is an integer in kobo, parsed deterministically.\nUtterances containing 10+ digit runs (e.g. account numbers) are rejected with `bad_request`.",
         "operationId": "interpret_utterance_v1_interpret_post",
         "requestBody": {
           "content": {
@@ -69,12 +83,50 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
+          "400": {
+            "description": "`bad_request`: Missing or invalid field",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_request",
+                    "message": "Missing or invalid field"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`session_expired`: Unknown or expired session_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": {
+                    "code": "session_expired",
+                    "message": "Unknown or expired session_id"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`server`: Model or server failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": {
+                    "code": "server",
+                    "message": "Model or server failure"
+                  }
                 }
               }
             }
@@ -82,10 +134,14 @@
         }
       }
     },
-    "/v1/confirmations/pending": {
+    "/v1/confirmations": {
       "post": {
-        "summary": "Create Pending Action",
-        "operationId": "create_pending_action_v1_confirmations_pending_post",
+        "tags": [
+          "SDK (contract v1.1)"
+        ],
+        "summary": "Create a pending confirmation",
+        "description": "Called after the SDK has read the details back to the user. `params` are the\n**resolved** values the bank will receive. The SDK must refuse to continue if\n`params_sha256` differs from its own hash (reference vector in API_CONTRACT.md).",
+        "operationId": "create_pending_confirmation_endpoint_v1_confirmations_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -97,7 +153,7 @@
           "required": true
         },
         "responses": {
-          "201": {
+          "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
@@ -107,12 +163,34 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
+          "400": {
+            "description": "`bad_request`: Missing or invalid field",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_request",
+                    "message": "Missing or invalid field"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`session_expired`: Unknown or expired session_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": {
+                    "code": "session_expired",
+                    "message": "Unknown or expired session_id"
+                  }
                 }
               }
             }
@@ -122,7 +200,11 @@
     },
     "/v1/confirmations/{id}/confirm": {
       "post": {
-        "summary": "Confirm Action",
+        "tags": [
+          "SDK (contract v1.1)"
+        ],
+        "summary": "Confirm and get a signed token",
+        "description": "Single use. For `voice`, the utterance must be a strict confirmation phrase\n(\"confirm\", \"confirm transfer\"); \"yes\", \"okay\" and anything with a negation are rejected.\nSensitive actions also need `auth`: an ES256 signature from the session's device key over\n`accessai-auth-v1|{session_id}|{pending_id}|{action_id}|{params_sha256}`.",
         "operationId": "confirm_action_v1_confirmations__id__confirm_post",
         "parameters": [
           {
@@ -156,88 +238,82 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
+          "401": {
+            "description": "`auth_invalid`: Sensitive action without a valid device signature; `session_expired`: Unknown or expired session_id",
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "auth_invalid",
+                    "message": "Sensitive action without a valid device signature"
+                  }
+                },
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/confirmations/confirm": {
-      "post": {
-        "summary": "Confirm Action Direct",
-        "operationId": "confirm_action_direct_v1_confirmations_confirm_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ConfirmRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConfirmResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
+          "404": {
+            "description": "`not_found`: Unknown pending_id, or it belongs to another session",
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "Unknown pending_id, or it belongs to another session"
+                  }
+                },
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
-          }
-        }
-      }
-    },
-    "/v1/confirm": {
-      "post": {
-        "summary": "Confirm Action Direct",
-        "operationId": "confirm_action_direct_v1_confirm_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ConfirmRequest"
+          },
+          "409": {
+            "description": "`confirmation_used`: Already confirmed or cancelled",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "confirmation_used",
+                    "message": "Already confirmed or cancelled"
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
+          "410": {
+            "description": "`confirmation_expired`: Confirmed after expires_at",
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "confirmation_expired",
+                    "message": "Confirmed after expires_at"
+                  }
+                },
                 "schema": {
-                  "$ref": "#/components/schemas/ConfirmResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "`not_a_confirmation`: Voice utterance is not a strict confirmation phrase",
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "not_a_confirmation",
+                    "message": "Voice utterance is not a strict confirmation phrase"
+                  }
+                },
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -247,7 +323,11 @@
     },
     "/v1/confirmations/{id}/cancel": {
       "post": {
-        "summary": "Cancel Action",
+        "tags": [
+          "SDK (contract v1.1)"
+        ],
+        "summary": "Cancel a pending confirmation",
+        "description": "Idempotent: cancelling twice returns 204. Returns `confirmation_used` if it was\nalready confirmed.",
         "operationId": "cancel_action_v1_confirmations__id__cancel_post",
         "parameters": [
           {
@@ -261,32 +341,70 @@
           }
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CancelRequest"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/CancelRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Req"
               }
             }
           }
         },
         "responses": {
-          "200": {
-            "description": "Successful Response",
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "`bad_request`: Missing or invalid field",
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "bad_request",
+                    "message": "Missing or invalid field"
+                  }
+                },
                 "schema": {
-                  "$ref": "#/components/schemas/CancelResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
+          "404": {
+            "description": "`not_found`: Unknown pending_id, or it belongs to another session",
             "content": {
               "application/json": {
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "Unknown pending_id, or it belongs to another session"
+                  }
+                },
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`confirmation_used`: Already confirmed or cancelled",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "confirmation_used",
+                    "message": "Already confirmed or cancelled"
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -296,15 +414,30 @@
     },
     "/.well-known/jwks.json": {
       "get": {
-        "summary": "Get Jwks",
-        "description": "Serves the public key in JWKS format for token verification by the host backend.",
+        "tags": [
+          "Bank backend"
+        ],
+        "summary": "Public keys for verifying tokens",
+        "description": "Before executing a sensitive action the bank backend must: verify the token's EdDSA\nsignature against these keys (matching `kid`) and its `exp`; check `aid` is the action\nit is about to run; recompute the canonical SHA-256 of the exact params it received and\ncompare to `ph`; and reject any `jti` it has seen before.",
         "operationId": "get_jwks__well_known_jwks_json_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {},
+                "example": {
+                  "keys": [
+                    {
+                      "kty": "OKP",
+                      "crv": "Ed25519",
+                      "kid": "accessai-fly-1",
+                      "use": "sig",
+                      "alg": "EdDSA",
+                      "x": "UrEEBnzChlPMqcKtwWItJr3W6uIdOFaTIgvspefMt48"
+                    }
+                  ]
+                }
               }
             }
           }
@@ -313,7 +446,10 @@
     },
     "/health": {
       "get": {
-        "summary": "Health Check",
+        "tags": [
+          "Ops"
+        ],
+        "summary": "Health check",
         "operationId": "health_check_health_get",
         "responses": {
           "200": {
@@ -332,6 +468,18 @@
     "schemas": {
       "CancelRequest": {
         "properties": {
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id",
+            "description": "Required: the session that created the confirmation"
+          },
           "reason": {
             "anyOf": [
               {
@@ -346,30 +494,12 @@
           }
         },
         "type": "object",
-        "title": "CancelRequest"
-      },
-      "CancelResponse": {
-        "properties": {
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
-          "confirmation_id": {
-            "type": "string",
-            "title": "Confirmation Id"
-          },
-          "spoken_prompt": {
-            "type": "string",
-            "title": "Spoken Prompt"
+        "title": "CancelRequest",
+        "examples": [
+          {
+            "session_id": "s_8f2c41d0a7b94e31"
           }
-        },
-        "type": "object",
-        "required": [
-          "status",
-          "confirmation_id",
-          "spoken_prompt"
-        ],
-        "title": "CancelResponse"
+        ]
       },
       "ConfirmRequest": {
         "properties": {
@@ -382,7 +512,8 @@
                 "type": "null"
               }
             ],
-            "title": "Session Id"
+            "title": "Session Id",
+            "description": "Required: the session that created the confirmation"
           },
           "pending_id": {
             "anyOf": [
@@ -393,7 +524,8 @@
                 "type": "null"
               }
             ],
-            "title": "Pending Id"
+            "title": "Pending Id",
+            "deprecated": true
           },
           "confirmation_id": {
             "anyOf": [
@@ -404,7 +536,8 @@
                 "type": "null"
               }
             ],
-            "title": "Confirmation Id"
+            "title": "Confirmation Id",
+            "deprecated": true
           },
           "method": {
             "anyOf": [
@@ -416,6 +549,7 @@
               }
             ],
             "title": "Method",
+            "description": "\"voice\" (utterance is checked against a strict phrase list) or \"touch\"",
             "default": "voice"
           },
           "utterance": {
@@ -427,7 +561,8 @@
                 "type": "null"
               }
             ],
-            "title": "Utterance"
+            "title": "Utterance",
+            "description": "For voice: e.g. \"confirm\" or \"confirm transfer\""
           },
           "auth": {
             "anyOf": [
@@ -437,11 +572,25 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Required for sensitive actions"
           }
         },
         "type": "object",
-        "title": "ConfirmRequest"
+        "title": "ConfirmRequest",
+        "examples": [
+          {
+            "auth": {
+              "alg": "ES256",
+              "kid": "device-1",
+              "method": "biometric",
+              "signature": "MEUCIQD…"
+            },
+            "method": "voice",
+            "session_id": "s_8f2c41d0a7b94e31",
+            "utterance": "confirm transfer"
+          }
+        ]
       },
       "ConfirmResponse": {
         "properties": {
@@ -449,39 +598,69 @@
             "type": "string",
             "title": "Status"
           },
-          "confirmation_id": {
-            "type": "string",
-            "title": "Confirmation Id"
-          },
           "token": {
             "type": "string",
-            "title": "Token"
+            "title": "Token",
+            "description": "Compact JWS (EdDSA). Verify against /.well-known/jwks.json before executing"
+          },
+          "nonce": {
+            "type": "string",
+            "title": "Nonce",
+            "description": "Equals the token's jti; use as the idempotency key"
           },
           "expires_at": {
-            "type": "integer",
-            "title": "Expires At"
+            "type": "string",
+            "title": "Expires At",
+            "description": "Token expiry, ISO 8601 UTC (at most 60 s)"
+          },
+          "confirmation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmation Id",
+            "deprecated": true
           },
           "spoken_prompt": {
-            "type": "string",
-            "title": "Spoken Prompt"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spoken Prompt",
+            "deprecated": true
           }
         },
         "type": "object",
         "required": [
           "status",
-          "confirmation_id",
           "token",
-          "expires_at",
-          "spoken_prompt"
+          "nonce",
+          "expires_at"
         ],
-        "title": "ConfirmResponse"
+        "title": "ConfirmResponse",
+        "examples": [
+          {
+            "expires_at": "2026-11-09T12:01:00Z",
+            "nonce": "8b0e4f2a9c1d",
+            "status": "confirmed",
+            "token": "eyJhbGciOiJFZERTQSIsImtpZCI6ImFjY2Vzc2FpLWZseS0xIn0.eyJpc3MiOiJhY2Nlc3NhaSJ9.c2ln"
+          }
+        ]
       },
       "DeviceAuth": {
         "properties": {
           "method": {
             "type": "string",
             "title": "Method",
-            "description": "Device unlock method: 'biometric' or 'device_credential'",
+            "description": "Device unlock method: 'biometric' or 'device_credential'. Becomes the token's amr claim",
             "default": "biometric"
           },
           "kid": {
@@ -512,11 +691,13 @@
         "properties": {
           "kid": {
             "type": "string",
-            "title": "Kid"
+            "title": "Kid",
+            "description": "Key ID; confirm requests must sign with the same kid"
           },
           "alg": {
             "type": "string",
             "title": "Alg",
+            "description": "Only ES256 (ECDSA P-256) is accepted",
             "default": "ES256"
           },
           "public_key": {
@@ -547,37 +728,104 @@
         ],
         "title": "DeviceKey"
       },
-      "HTTPValidationError": {
+      "ErrorDetail": {
         "properties": {
-          "detail": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationError"
-            },
-            "type": "array",
-            "title": "Detail"
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "description": "Machine-readable error code; see the error table in API_CONTRACT.md",
+            "examples": [
+              "not_a_confirmation"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Human-readable detail for logs; never shown to users"
           }
         },
         "type": "object",
-        "title": "HTTPValidationError"
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ErrorDetail"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "title": "ErrorResponse",
+        "description": "Body of every non-2xx response."
       },
       "InterpretRequest": {
         "properties": {
           "session_id": {
             "type": "string",
-            "title": "Session Id"
+            "title": "Session Id",
+            "description": "From POST /v1/sessions"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text",
+            "description": "The user's utterance"
           },
           "utterance": {
-            "type": "string",
-            "title": "Utterance"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utterance",
+            "deprecated": true
+          },
+          "actions": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actions",
+            "description": "The host's allowlist. The ONLY actions that may be returned"
           },
           "manifest": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "type": "array",
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Manifest",
-            "description": "Allowed actions exposed by the host Android app"
+            "deprecated": true
           },
           "screen_descriptor": {
             "anyOf": [
@@ -588,9 +836,14 @@
                 "type": "null"
               }
             ],
-            "title": "Screen Descriptor"
+            "title": "Screen Descriptor",
+            "deprecated": true
           },
           "screen": {
+            "title": "Screen",
+            "description": "Current screen descriptor (optional)"
+          },
+          "dialog": {
             "anyOf": [
               {
                 "additionalProperties": true,
@@ -601,13 +854,11 @@
                 "type": "array"
               },
               {
-                "type": "string"
-              },
-              {
                 "type": "null"
               }
             ],
-            "title": "Screen"
+            "title": "Dialog",
+            "description": "What AccessAI is in the middle of, if anything"
           },
           "dialog_state": {
             "anyOf": [
@@ -616,25 +867,155 @@
                 "type": "object"
               },
               {
+                "items": {},
+                "type": "array"
+              },
+              {
                 "type": "null"
               }
             ],
-            "title": "Dialog State"
+            "title": "Dialog State",
+            "deprecated": true
+          },
+          "locale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locale",
+            "description": "BCP 47 locale hint"
           }
         },
         "type": "object",
         "required": [
-          "session_id",
-          "utterance",
-          "manifest"
+          "session_id"
         ],
-        "title": "InterpretRequest"
+        "title": "InterpretRequest",
+        "examples": [
+          {
+            "actions": [
+              {
+                "description": "Send money to a saved beneficiary",
+                "examples": [
+                  "send 5000 naira to David"
+                ],
+                "id": "transfer_money",
+                "name": "send money",
+                "params": [
+                  {
+                    "description": "Beneficiary name as the user said it",
+                    "name": "recipient",
+                    "required": true,
+                    "type": "string"
+                  },
+                  {
+                    "description": "Amount in kobo",
+                    "name": "amount_minor",
+                    "required": true,
+                    "type": "amount_minor"
+                  }
+                ],
+                "requires_confirmation": true,
+                "sensitivity": "sensitive"
+              }
+            ],
+            "dialog": {
+              "awaiting": "none",
+              "filled_params": {},
+              "missing_params": []
+            },
+            "locale": "en-NG",
+            "screen": {
+              "elements": [],
+              "screen_id": "home",
+              "title": "Home"
+            },
+            "session_id": "s_8f2c41d0a7b94e31",
+            "text": "Send 5,000 to David"
+          }
+        ]
       },
       "InterpretResponse": {
         "properties": {
-          "type": {
+          "request_id": {
             "type": "string",
-            "title": "Type"
+            "title": "Request Id"
+          },
+          "outcome": {
+            "type": "string",
+            "title": "Outcome",
+            "description": "\"action\" | \"clarify\" | \"unsupported\" | \"control\"",
+            "default": "action"
+          },
+          "action_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action Id",
+            "description": "For action: always one of request.actions[].id"
+          },
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params",
+            "description": "Only params the user actually said; amount_minor is an integer in kobo"
+          },
+          "missing_params": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Params"
+          },
+          "control": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Control",
+            "description": "For control: cancel | stop | repeat | next | previous | help | describe_screen"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "description": "For clarify/unsupported: short spoken text"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence",
+            "description": "0..1; the SDK treats low values as unclear"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type",
+            "deprecated": true
           },
           "intent": {
             "anyOf": [
@@ -645,7 +1026,214 @@
                 "type": "null"
               }
             ],
-            "title": "Intent"
+            "title": "Intent",
+            "deprecated": true
+          },
+          "spoken_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spoken Prompt",
+            "deprecated": true
+          },
+          "clarification_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clarification Reason",
+            "deprecated": true
+          },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "default": "en",
+            "deprecated": true
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider",
+            "deprecated": true
+          },
+          "processing_region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Processing Region",
+            "deprecated": true
+          },
+          "data_processing_notice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Processing Notice",
+            "deprecated": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "request_id",
+          "confidence"
+        ],
+        "title": "InterpretResponse",
+        "examples": [
+          {
+            "action_id": "transfer_money",
+            "confidence": 0.93,
+            "missing_params": [],
+            "outcome": "action",
+            "params": {
+              "amount_minor": 500000,
+              "recipient": "David"
+            },
+            "request_id": "r_5d1e9c"
+          }
+        ]
+      },
+      "PendingConfirmationRequest": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "action_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action Id",
+            "description": "The action being confirmed"
+          },
+          "action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action",
+            "deprecated": true
+          },
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params",
+            "description": "RESOLVED values (beneficiary id, not name); exactly what the bank will receive"
+          },
+          "sensitivity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sensitivity",
+            "description": "\"read\" | \"navigate\" | \"sensitive\"",
+            "default": "sensitive"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "params"
+        ],
+        "title": "PendingConfirmationRequest",
+        "examples": [
+          {
+            "action_id": "transfer_money",
+            "params": {
+              "amount_minor": 500000,
+              "recipient": "ben_001"
+            },
+            "session_id": "s_8f2c41d0a7b94e31"
+          }
+        ]
+      },
+      "PendingConfirmationResponse": {
+        "properties": {
+          "pending_id": {
+            "type": "string",
+            "title": "Pending Id"
+          },
+          "params_sha256": {
+            "type": "string",
+            "title": "Params Sha256",
+            "description": "Lowercase hex SHA-256 of the canonical JSON of params. The SDK must check it matches its own"
+          },
+          "expires_at": {
+            "type": "string",
+            "title": "Expires At",
+            "description": "ISO 8601 UTC; 60 seconds by default"
+          },
+          "confirmation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmation Id",
+            "deprecated": true
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id",
+            "deprecated": true
+          },
+          "action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action",
+            "deprecated": true
           },
           "params": {
             "anyOf": [
@@ -657,141 +1245,42 @@
                 "type": "null"
               }
             ],
-            "title": "Params"
-          },
-          "confidence": {
-            "type": "number",
-            "title": "Confidence"
-          },
-          "spoken_prompt": {
-            "type": "string",
-            "title": "Spoken Prompt"
-          },
-          "clarification_reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Clarification Reason"
-          },
-          "language": {
-            "type": "string",
-            "title": "Language",
-            "default": "en"
-          },
-          "provider": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provider"
-          },
-          "processing_region": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Processing Region"
-          },
-          "data_processing_notice": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Data Processing Notice"
-          }
-        },
-        "type": "object",
-        "required": [
-          "type",
-          "confidence",
-          "spoken_prompt"
-        ],
-        "title": "InterpretResponse"
-      },
-      "PendingConfirmationRequest": {
-        "properties": {
-          "session_id": {
-            "type": "string",
-            "title": "Session Id"
-          },
-          "action": {
-            "type": "string",
-            "title": "Action"
-          },
-          "params": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Params"
-          }
-        },
-        "type": "object",
-        "required": [
-          "session_id",
-          "action",
-          "params"
-        ],
-        "title": "PendingConfirmationRequest"
-      },
-      "PendingConfirmationResponse": {
-        "properties": {
-          "confirmation_id": {
-            "type": "string",
-            "title": "Confirmation Id"
-          },
-          "session_id": {
-            "type": "string",
-            "title": "Session Id"
-          },
-          "action": {
-            "type": "string",
-            "title": "Action"
-          },
-          "params": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Params"
+            "title": "Params",
+            "deprecated": true
           },
           "status": {
             "type": "string",
-            "title": "Status"
+            "title": "Status",
+            "default": "pending",
+            "deprecated": true
           },
           "spoken_prompt": {
-            "type": "string",
-            "title": "Spoken Prompt"
-          },
-          "expires_at": {
-            "type": "integer",
-            "title": "Expires At"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spoken Prompt",
+            "deprecated": true
           }
         },
         "type": "object",
         "required": [
-          "confirmation_id",
-          "session_id",
-          "action",
-          "params",
-          "status",
-          "spoken_prompt",
+          "pending_id",
+          "params_sha256",
           "expires_at"
         ],
-        "title": "PendingConfirmationResponse"
+        "title": "PendingConfirmationResponse",
+        "examples": [
+          {
+            "expires_at": "2026-11-09T12:01:00Z",
+            "params_sha256": "b729a280eabf6c63b6a6b889bfa1b26d4dad23286f2e3a36b98028e35879cd47",
+            "pending_id": "pc_3b9e7a10c4d2"
+          }
+        ]
       },
       "SessionCreateRequest": {
         "properties": {
@@ -804,7 +1293,8 @@
                 "type": "null"
               }
             ],
-            "title": "Session Id"
+            "title": "Session Id",
+            "description": "Optional client-chosen id; generated when omitted"
           },
           "app_id": {
             "anyOf": [
@@ -815,7 +1305,8 @@
                 "type": "null"
               }
             ],
-            "title": "App Id"
+            "title": "App Id",
+            "description": "Host app's public identifier"
           },
           "locale": {
             "anyOf": [
@@ -826,7 +1317,8 @@
                 "type": "null"
               }
             ],
-            "title": "Locale"
+            "title": "Locale",
+            "description": "BCP 47 locale hint, e.g. en-NG, yo-NG, ha-NG"
           },
           "device_key": {
             "anyOf": [
@@ -836,7 +1328,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Android Keystore public key. Required to confirm sensitive actions"
           },
           "metadata": {
             "anyOf": [
@@ -852,7 +1345,18 @@
           }
         },
         "type": "object",
-        "title": "SessionCreateRequest"
+        "title": "SessionCreateRequest",
+        "examples": [
+          {
+            "app_id": "accesspay-demo",
+            "device_key": {
+              "alg": "ES256",
+              "kid": "device-1",
+              "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE…"
+            },
+            "locale": "en-NG"
+          }
+        ]
       },
       "SessionResponse": {
         "properties": {
@@ -860,9 +1364,15 @@
             "type": "string",
             "title": "Session Id"
           },
+          "expires_at": {
+            "type": "string",
+            "title": "Expires At",
+            "description": "ISO 8601 UTC; sessions last 24 hours"
+          },
           "status": {
             "type": "string",
-            "title": "Status"
+            "title": "Status",
+            "default": "active"
           },
           "app_id": {
             "anyOf": [
@@ -902,63 +1412,58 @@
             "title": "Metadata"
           },
           "created_at": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Created At"
           },
           "updated_at": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Updated At"
           }
         },
         "type": "object",
         "required": [
           "session_id",
-          "status",
-          "created_at",
-          "updated_at"
+          "expires_at"
         ],
-        "title": "SessionResponse"
-      },
-      "ValidationError": {
-        "properties": {
-          "loc": {
-            "items": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                }
-              ]
-            },
-            "type": "array",
-            "title": "Location"
-          },
-          "msg": {
-            "type": "string",
-            "title": "Message"
-          },
-          "type": {
-            "type": "string",
-            "title": "Error Type"
-          },
-          "input": {
-            "title": "Input"
-          },
-          "ctx": {
-            "type": "object",
-            "title": "Context"
+        "title": "SessionResponse",
+        "examples": [
+          {
+            "app_id": "accesspay-demo",
+            "expires_at": "2026-11-10T12:00:00Z",
+            "locale": "en-NG",
+            "session_id": "s_8f2c41d0a7b94e31",
+            "status": "active"
           }
-        },
-        "type": "object",
-        "required": [
-          "loc",
-          "msg",
-          "type"
-        ],
-        "title": "ValidationError"
+        ]
       }
     }
-  }
+  },
+  "tags": [
+    {
+      "name": "SDK (contract v1.1)",
+      "description": "Endpoints the Android SDK calls."
+    },
+    {
+      "name": "Bank backend",
+      "description": "Used by the host's backend to verify confirmation tokens."
+    },
+    {
+      "name": "Ops",
+      "description": "Health checks."
+    }
+  ]
 }

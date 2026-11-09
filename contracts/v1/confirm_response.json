@@ -1,32 +1,64 @@
 {
+  "examples": [
+    {
+      "expires_at": "2026-11-09T12:01:00Z",
+      "nonce": "8b0e4f2a9c1d",
+      "status": "confirmed",
+      "token": "eyJhbGciOiJFZERTQSIsImtpZCI6ImFjY2Vzc2FpLWZseS0xIn0.eyJpc3MiOiJhY2Nlc3NhaSJ9.c2ln"
+    }
+  ],
   "properties": {
     "status": {
       "title": "Status",
       "type": "string"
     },
-    "confirmation_id": {
-      "title": "Confirmation Id",
-      "type": "string"
-    },
     "token": {
+      "description": "Compact JWS (EdDSA). Verify against /.well-known/jwks.json before executing",
       "title": "Token",
       "type": "string"
     },
+    "nonce": {
+      "description": "Equals the token's jti; use as the idempotency key",
+      "title": "Nonce",
+      "type": "string"
+    },
     "expires_at": {
+      "description": "Token expiry, ISO 8601 UTC (at most 60 s)",
       "title": "Expires At",
-      "type": "integer"
+      "type": "string"
+    },
+    "confirmation_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "deprecated": true,
+      "title": "Confirmation Id"
     },
     "spoken_prompt": {
-      "title": "Spoken Prompt",
-      "type": "string"
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "deprecated": true,
+      "title": "Spoken Prompt"
     }
   },
   "required": [
     "status",
-    "confirmation_id",
     "token",
-    "expires_at",
-    "spoken_prompt"
+    "nonce",
+    "expires_at"
   ],
   "title": "ConfirmResponse",
   "type": "object"

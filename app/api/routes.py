@@ -8,6 +8,7 @@ from app.api.schemas import (
   CancelRequest,
   ConfirmRequest,
   ConfirmResponse,
+  ErrorResponse,
   InterpretRequest,
   InterpretResponse,
   PendingConfirmationRequest,
@@ -27,6 +28,50 @@ from app.services.interpreter import InterpreterService, validate_defence_in_dep
 
 router = APIRouter()
 
+SDK_TAG = "SDK (contract v1.1)"
+BANK_TAG = "Bank backend"
+
+_ERROR_TEXT = {
+  "bad_request": "Missing or invalid field",
+  "session_expired": "Unknown or expired session_id",
+  "auth_invalid": "Sensitive action without a valid device signature",
+  "not_found": "Unknown pending_id, or it belongs to another session",
+  "confirmation_used": "Already confirmed or cancelled",
+  "confirmation_expired": "Confirmed after expires_at",
+  "not_a_confirmation": "Voice utterance is not a strict confirmation phrase",
+  "server": "Model or server failure",
+}
+_ERROR_STATUS = {
+  "bad_request": 400,
+  "session_expired": 401,
+  "auth_invalid": 401,
+  "not_found": 404,
+  "confirmation_used": 409,
+  "confirmation_expired": 410,
+  "not_a_confirmation": 422,
+  "server": 500,
+}
+
+
+def _errors(*codes: str) -> dict:
+  """OpenAPI `responses` entries for the contract error codes an endpoint can return."""
+  by_status: dict[int, list[str]] = {}
+  for code in codes:
+    by_status.setdefault(_ERROR_STATUS[code], []).append(code)
+  return {
+    status: {
+      "model": ErrorResponse,
+      "description": "; ".join(f"`{c}`: {_ERROR_TEXT[c]}" for c in group),
+      "content": {
+        "application/json": {
+          "example": {"error": {"code": group[0], "message": _ERROR_TEXT[group[0]]}}
+        }
+      },
+    }
+    for status, group in by_status.items()
+  }
+
+
 _SERVICE_CACHE: dict[str, InterpreterService] = {}
 
 
@@ -42,8 +87,17 @@ def get_interpreter_service() -> InterpreterService:
   return _SERVICE_CACHE[p_name]
 
 
-@router.post("/v1/sessions", response_model=SessionResponse, status_code=200)
+@router.post(
+  "/v1/sessions",
+  response_model=SessionResponse,
+  status_code=200,
+  tags=[SDK_TAG],
+  summary="Start a session",
+  responses=_errors("bad_request"),
+)
 async def create_new_session(req: SessionCreateRequest):
+  """Creates a session (valid 24 hours). Register the device's Android Keystore public key
+  here (`device_key`): it is required later to confirm sensitive actions."""
   sess = await create_session(
     session_id=req.session_id,
     metadata=req.metadata,
@@ -58,11 +112,23 @@ async def create_new_session(req: SessionCreateRequest):
   return sess
 
 
-@router.post("/v1/interpret", response_model=InterpretResponse)
+@router.post(
+  "/v1/interpret",
+  response_model=InterpretResponse,
+  tags=[SDK_TAG],
+  summary="Interpret one utterance",
+  responses=_errors("bad_request", "session_expired", "server"),
+)
 async def interpret_utterance(
   req: InterpretRequest,
   service: Annotated[InterpreterService, Depends(get_interpreter_service)],
 ):
+  """Turns what the user said into a structured suggestion. **Never executes anything.**
+
+  `action_id` is always one of `request.actions[].id`. Params the user didn't say are left
+  out, never guessed. `amount_minor` is an integer in kobo, parsed deterministically.
+  Utterances containing 10+ digit runs (e.g. account numbers) are rejected with `bad_request`.
+  """
   text = req.text or req.utterance
   if not text:
     return JSONResponse(
@@ -145,14 +211,23 @@ async def interpret_utterance(
 
 
 @router.post(
-  "/v1/confirmations", response_model=PendingConfirmationResponse, status_code=200
+  "/v1/confirmations",
+  response_model=PendingConfirmationResponse,
+  status_code=200,
+  tags=[SDK_TAG],
+  summary="Create a pending confirmation",
+  responses=_errors("bad_request", "session_expired"),
 )
 @router.post(
   "/v1/confirmations/pending",
   response_model=PendingConfirmationResponse,
   status_code=200,
+  include_in_schema=False,  # legacy alias; removal tracked in #25
 )
 async def create_pending_confirmation_endpoint(req: PendingConfirmationRequest):
+  """Called after the SDK has read the details back to the user. `params` are the
+  **resolved** values the bank will receive. The SDK must refuse to continue if
+  `params_sha256` differs from its own hash (reference vector in API_CONTRACT.md)."""
   # Security Bug 3: Reject unknown sessions with session_expired (401)
   session = await get_session(req.session_id)
   if not session:
@@ -197,8 +272,25 @@ async def create_pending_confirmation_endpoint(req: PendingConfirmationRequest):
   }
 
 
-@router.post("/v1/confirmations/{id}/confirm", response_model=ConfirmResponse)
+@router.post(
+  "/v1/confirmations/{id}/confirm",
+  response_model=ConfirmResponse,
+  tags=[SDK_TAG],
+  summary="Confirm and get a signed token",
+  responses=_errors(
+    "auth_invalid",
+    "session_expired",
+    "not_found",
+    "confirmation_used",
+    "confirmation_expired",
+    "not_a_confirmation",
+  ),
+)
 async def confirm_action(id: str, req: ConfirmRequest):
+  """Single use. For `voice`, the utterance must be a strict confirmation phrase
+  ("confirm", "confirm transfer"); "yes", "okay" and anything with a negation are rejected.
+  Sensitive actions also need `auth`: an ES256 signature from the session's device key over
+  `accessai-auth-v1|{session_id}|{pending_id}|{action_id}|{params_sha256}`."""
   # Security Bug 4: Require session_id in confirm request body
   if not req.session_id:
     return JSONResponse(
@@ -219,8 +311,11 @@ async def confirm_action(id: str, req: ConfirmRequest):
   return result
 
 
-@router.post("/v1/confirm", response_model=ConfirmResponse)
-@router.post("/v1/confirmations/confirm", response_model=ConfirmResponse)
+# Legacy aliases, hidden from the docs; removal tracked in #25
+@router.post("/v1/confirm", response_model=ConfirmResponse, include_in_schema=False)
+@router.post(
+  "/v1/confirmations/confirm", response_model=ConfirmResponse, include_in_schema=False
+)
 async def confirm_action_direct(req: ConfirmRequest):
   conf_id = req.confirmation_id or req.pending_id
   if not conf_id:
@@ -253,8 +348,16 @@ async def confirm_action_direct(req: ConfirmRequest):
   return result
 
 
-@router.post("/v1/confirmations/{id}/cancel", status_code=204)
+@router.post(
+  "/v1/confirmations/{id}/cancel",
+  status_code=204,
+  tags=[SDK_TAG],
+  summary="Cancel a pending confirmation",
+  responses=_errors("bad_request", "not_found", "confirmation_used"),
+)
 async def cancel_action(id: str, req: CancelRequest | None = None):
+  """Idempotent: cancelling twice returns 204. Returns `confirmation_used` if it was
+  already confirmed."""
   cancel_req = req or CancelRequest()
   if not cancel_req.session_id:
     return JSONResponse(
@@ -271,7 +374,34 @@ async def cancel_action(id: str, req: CancelRequest | None = None):
   return Response(status_code=204)
 
 
-@router.get("/.well-known/jwks.json")
+@router.get(
+  "/.well-known/jwks.json",
+  tags=[BANK_TAG],
+  summary="Public keys for verifying tokens",
+  responses={
+    200: {
+      "content": {
+        "application/json": {
+          "example": {
+            "keys": [
+              {
+                "kty": "OKP",
+                "crv": "Ed25519",
+                "kid": "accessai-fly-1",
+                "use": "sig",
+                "alg": "EdDSA",
+                "x": "UrEEBnzChlPMqcKtwWItJr3W6uIdOFaTIgvspefMt48",
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+)
 async def get_jwks():
-  """Serves the public key in JWKS format for token verification by the host backend."""
+  """Before executing a sensitive action the bank backend must: verify the token's EdDSA
+  signature against these keys (matching `kid`) and its `exp`; check `aid` is the action
+  it is about to run; recompute the canonical SHA-256 of the exact params it received and
+  compare to `ph`; and reject any `jti` it has seen before."""
   return signer.get_jwks()
