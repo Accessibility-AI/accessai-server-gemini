@@ -140,6 +140,32 @@ python tests/evals/run_evals.py --provider gemini --limit 20
 
 ---
 
+## Deploying to Fly.io
+
+`fly.toml` runs **one** always-on machine in London (`lhr`), with SQLite on a persistent volume mounted at `/data`. In production the server refuses to start without `GEMINI_API_KEY` and `ED25519_PRIVATE_KEY_B64`.
+
+**First deploy:**
+
+```bash
+flyctl apps create accessai-server-gemini
+flyctl volumes create accessai_data --region lhr --size 1
+
+# Generate the token-signing key locally (never commit it or paste it anywhere)
+python -c "import base64; from cryptography.hazmat.primitives.asymmetric import ed25519; from cryptography.hazmat.primitives import serialization as s; print(base64.b64encode(ed25519.Ed25519PrivateKey.generate().private_bytes(s.Encoding.Raw, s.PrivateFormat.Raw, s.NoEncryption())).decode())"
+
+flyctl secrets set GEMINI_API_KEY=<key> ED25519_PRIVATE_KEY_B64=<key-from-above> --stage
+flyctl deploy --ha=false
+```
+
+**Check it:** `https://accessai-server-gemini.fly.dev/health` and `/.well-known/jwks.json`.
+
+**Notes:**
+- Keep it to one machine (`--ha=false`). Each machine would have its own SQLite file, so a confirmation started on one couldn't be completed on another.
+- When rotating the signing key, also change `JWKS_KID` in `fly.toml` so bank backends can tell the keys apart.
+- The service has no rate limiting yet, so set a spending cap on the Gemini API key before sharing the URL.
+
+---
+
 ## License
 
 Apache-2.0
