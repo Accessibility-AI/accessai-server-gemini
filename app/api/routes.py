@@ -20,6 +20,7 @@ from app.api.schemas import (
 from app.config import settings
 from app.crypto.jws_signer import signer
 from app.db.database import (
+  SESSION_TTL_SECONDS,
   create_session,
   get_session,
 )
@@ -111,9 +112,9 @@ async def create_new_session(req: SessionCreateRequest):
     app_id=req.app_id,
     locale=req.locale,
   )
-  expires_at_iso = datetime.fromtimestamp(sess["created_at"] + 86400, UTC).strftime(
-    "%Y-%m-%dT%H:%M:%SZ"
-  )
+  expires_at_iso = datetime.fromtimestamp(
+    sess["created_at"] + SESSION_TTL_SECONDS, UTC
+  ).strftime("%Y-%m-%dT%H:%M:%SZ")
   sess["expires_at"] = expires_at_iso
   return sess
 
@@ -185,9 +186,10 @@ async def interpret_utterance(
   except ValueError as e:
     err_msg = str(e)
     if "API key not configured" in err_msg:
+      logger.error("LLM configuration error: %s", err_msg)
       return JSONResponse(
         status_code=500,
-        content={"error": {"code": "server", "message": err_msg}},
+        content={"error": {"code": "server", "message": "Server misconfigured"}},
       )
     return JSONResponse(
       status_code=400,
@@ -309,11 +311,11 @@ async def confirm_action(id: str, req: ConfirmRequest):
   ("confirm", "confirm transfer"); "yes", "okay" and anything with a negation are rejected.
   Sensitive actions also need `auth`: an ES256 signature from the session's device key over
   `accessai-auth-v1|{session_id}|{pending_id}|{action_id}|{params_sha256}`."""
-  # Security Bug 4: Require session_id in confirm request body
+  # Require non-empty session_id in confirm request body
   if not req.session_id:
     return JSONResponse(
-      status_code=404,
-      content={"error": {"code": "not_found", "message": "session_id is required"}},
+      status_code=400,
+      content={"error": {"code": "bad_request", "message": "session_id is required"}},
     )
 
   auth_dict = req.auth.model_dump() if req.auth else None
@@ -349,8 +351,8 @@ async def confirm_action_direct(req: ConfirmRequest):
 
   if not req.session_id:
     return JSONResponse(
-      status_code=404,
-      content={"error": {"code": "not_found", "message": "session_id is required"}},
+      status_code=400,
+      content={"error": {"code": "bad_request", "message": "session_id is required"}},
     )
 
   auth_dict = req.auth.model_dump() if req.auth else None

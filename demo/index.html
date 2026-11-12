@@ -497,6 +497,90 @@
     let recognition = null;
     let isBackendConnected = false;
     let currentLang = "pcm";
+    let deviceKeyPair = null;
+    let deviceKeySpec = null;
+    const DEMO_KEY_ID = "demo-web-key-1";
+
+    function bytesToBase64(bytes) {
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      return btoa(binary);
+    }
+
+    function derEncodeInt(bytes) {
+      let i = 0;
+      while (i < bytes.length - 1 && bytes[i] === 0) i++;
+      let trimmed = bytes.slice(i);
+      if (trimmed[0] & 0x80) {
+        const padded = new Uint8Array(trimmed.length + 1);
+        padded.set(trimmed, 1);
+        trimmed = padded;
+      }
+      const out = new Uint8Array(2 + trimmed.length);
+      out[0] = 0x02;
+      out[1] = trimmed.length;
+      out.set(trimmed, 2);
+      return out;
+    }
+
+    function p1363ToDer(sigBytes) {
+      const half = Math.floor(sigBytes.length / 2);
+      const rDer = derEncodeInt(sigBytes.slice(0, half));
+      const sDer = derEncodeInt(sigBytes.slice(half));
+      const seq = new Uint8Array(2 + rDer.length + sDer.length);
+      seq[0] = 0x30;
+      seq[1] = rDer.length + sDer.length;
+      seq.set(rDer, 2);
+      seq.set(sDer, 2 + rDer.length);
+      return seq;
+    }
+
+    async function ensureDemoDeviceKey() {
+      if (deviceKeySpec) return deviceKeySpec;
+      if (!window.crypto || !window.crypto.subtle) return null;
+      deviceKeyPair = await window.crypto.subtle.generateKey(
+        { name: "ECDSA", namedCurve: "P-256" },
+        false,
+        ["sign", "verify"]
+      );
+      const spki = await window.crypto.subtle.exportKey("spki", deviceKeyPair.publicKey);
+      deviceKeySpec = {
+        kid: DEMO_KEY_ID,
+        alg: "ES256",
+        public_key: bytesToBase64(new Uint8Array(spki)),
+        attestation_chain: []
+      };
+      return deviceKeySpec;
+    }
+
+    async function buildDemoAuth(pending) {
+      if (!deviceKeyPair || !window.crypto || !window.crypto.subtle || !pending) return null;
+      const payload = `accessai-auth-v1|${sessionId}|${pending.pending_id}|${pending.action_id}|${pending.params_sha256}`;
+      const encoded = new TextEncoder().encode(payload);
+      const rawSig = await window.crypto.subtle.sign(
+        { name: "ECDSA", hash: "SHA-256" },
+        deviceKeyPair.privateKey,
+        encoded
+      );
+      const derSig = p1363ToDer(new Uint8Array(rawSig));
+      return {
+        method: "biometric",
+        kid: DEMO_KEY_ID,
+        alg: "ES256",
+        signature: bytesToBase64(derSig)
+      };
+    }
+
+    function decodeJwtClaims(token) {
+      try {
+        const seg = (token || "").split(".")[1];
+        if (!seg) return {};
+        const b64 = seg.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (seg.length % 4)) % 4);
+        return JSON.parse(atob(b64));
+      } catch {
+        return {};
+      }
+    }
 
     let API_BASE = localStorage.getItem("accessai_backend_url") || (location.protocol.startsWith("http") ? location.origin : "http://localhost:8000");
     let allowFallback = localStorage.getItem("accessai_fallback") !== "false";
@@ -729,10 +813,15 @@
 
       if (isBackendConnected) {
         try {
+          const dk = await ensureDemoDeviceKey();
           const sessRes = await fetch(`${API_BASE}/v1/sessions`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ session_id: sessionId, locale: "en-NG" })
+            body: JSON.stringify({
+              app_id: "accesspay-demo",
+              locale: "en-NG",
+              ...(dk ? { device_key: dk } : {})
+            })
           });
           if (sessRes.ok) {
             const s = await sessRes.json();
@@ -799,7 +888,7 @@
             return;
           }
 
-          handleSuccessInterpretation(data, detectedLang);
+          await handleSuccessInterpretation(data, detectedLang);
           return;
         } catch (e) {
           console.warn("Live backend call failed, falling back to simulator:", e);
@@ -814,10 +903,10 @@
 
       const simData = simulateInterpretation(clean, detectedLang);
       document.getElementById("rawJsonResponse").textContent = JSON.stringify(simData, null, 2);
-      handleSuccessInterpretation(simData, detectedLang);
+      await handleSuccessInterpretation(simData, detectedLang);
     }
 
-    function handleSuccessInterpretation(data, requestLang = "pcm") {
+    async function handleSuccessInterpretation(data, requestLang = "pcm") {
       const outcome = data.outcome || "unknown";
       const actionId = data.action_id || "--";
       const params = data.params || {};
@@ -850,9 +939,10 @@
 
       speakText(msg, lang);
 
-      // If an actionable sensitive transfer is recognized, register pending confirmation
-      if (outcome === "action" && actionId === "transfer_money") {
-        createPendingConfirmation(actionId, params, lang);
+      // If a complete actionable transfer is recognized, register pending confirmation
+      const missing = data.missing_params || [];
+      if (outcome === "action" && actionId === "transfer_money" && missing.length === 0) {
+        await createPendingConfirmation(actionId, params, lang);
       }
     }
 
@@ -881,6 +971,7 @@
             const conf = await res.json();
             currentPending = {
               pending_id: conf.pending_id,
+              action_id: actionId,
               params: params,
               params_sha256: conf.params_sha256,
               expires_at: conf.expires_at,
@@ -899,6 +990,7 @@
       const fakeHash = Array.from(new Uint8Array(32)).map(() => Math.floor(Math.random()*16).toString(16)).join("");
       currentPending = {
         pending_id: fakeId,
+        action_id: actionId,
         params: params,
         params_sha256: fakeHash,
         expires_at: new Date(Date.now() + 60000).toISOString(),
@@ -918,7 +1010,6 @@
     async function runConfirmScenario(phrase) {
       if (!currentPending) {
         await processUtterance("abeg send 5k give David");
-        await new Promise(r => setTimeout(r, 600));
       }
 
       if (!currentPending) {
@@ -931,13 +1022,15 @@
 
       if (isBackendConnected) {
         try {
+          const auth = await buildDemoAuth(currentPending);
           const res = await fetch(`${API_BASE}/v1/confirmations/${currentPending.pending_id}/confirm`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               session_id: sessionId,
               method: "voice",
-              utterance: phrase
+              utterance: phrase,
+              ...(auth ? { auth } : {})
             })
           });
 
@@ -964,6 +1057,11 @@
             renderTokenSuccess(data, lang);
             return;
           }
+
+          document.getElementById("tokenStatusBadge").textContent = `Rejected (${res.status} ${(data.error && data.error.code) || "error"})`;
+          document.getElementById("tokenStatusBadge").className = "text-[10px] px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-mono";
+          handleErrorResponse(data);
+          return;
         } catch (e) {
           console.warn("Backend confirm failed, using simulated logic:", e);
         }
@@ -1008,16 +1106,17 @@
     }
 
     function renderTokenSuccess(data, lang) {
+      const claims = decodeJwtClaims(data.token);
       document.getElementById("tokenStatusBadge").textContent = "TOKEN MINTED & SIGNED";
       document.getElementById("tokenStatusBadge").className = "text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono border border-emerald-500/40";
       document.getElementById("pendingIndicator").textContent = "Confirmed & Consumed";
       document.getElementById("pendingIndicator").className = "px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono";
 
-      document.getElementById("claimIss").textContent = data.iss || "accessai";
-      document.getElementById("claimAid").textContent = data.aid || "transfer_money";
-      document.getElementById("claimPh").textContent = (data.ph || "").substring(0, 16) + "...";
-      document.getElementById("claimJti").textContent = data.jti || "--";
-      document.getElementById("claimAmr").textContent = JSON.stringify(data.amr || ["voice"]);
+      document.getElementById("claimIss").textContent = claims.iss || data.iss || "accessai";
+      document.getElementById("claimAid").textContent = claims.aid || data.aid || "transfer_money";
+      document.getElementById("claimPh").textContent = ((claims.ph || data.ph || "").substring(0, 16) || "--") + "...";
+      document.getElementById("claimJti").textContent = claims.jti || data.jti || data.nonce || "--";
+      document.getElementById("claimAmr").textContent = JSON.stringify(claims.amr || data.amr || ["voice"]);
       document.getElementById("rawTokenBox").textContent = data.token || "(Token payload)";
 
       speakText(data.spoken_prompt || "Transfer confirmed. Short-lived signed authorization token issued.", lang);
@@ -1053,7 +1152,6 @@
 
     async function testConcurrencyRace() {
       await processUtterance("send 5000 naira to David");
-      await new Promise(r => setTimeout(r, 600));
 
       if (!currentPending) {
         alert("Failed to initialize pending confirmation.");
@@ -1064,6 +1162,7 @@
       document.getElementById("rawJsonResponse").textContent = "Firing 20 concurrent /confirm requests to test atomic race condition...";
 
       if (isBackendConnected) {
+        const auth = await buildDemoAuth(currentPending);
         const promises = Array.from({ length: 20 }).map(() =>
           fetch(`${API_BASE}/v1/confirmations/${confId}/confirm`, {
             method: "POST",
@@ -1071,7 +1170,8 @@
             body: JSON.stringify({
               session_id: sessionId,
               method: "voice",
-              utterance: "confirm"
+              utterance: "confirm",
+              ...(auth ? { auth } : {})
             })
           }).then(res => res.status)
         );

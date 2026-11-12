@@ -105,6 +105,32 @@ def validate_defence_in_depth(
   return True, ""
 
 
+_SENSITIVE_DIALOG_KEYS = {
+  "balance",
+  "beneficiaries",
+  "account_number",
+  "pin",
+  "bvn",
+  "password",
+  "last_system_message",
+  "value",
+}
+
+
+def _sanitize_dialog_state(dialog_state: Any) -> dict[str, Any] | list[Any] | None:
+  """Strips sensitive fields from dialog state regardless of whether it is a dict or list."""
+  if isinstance(dialog_state, dict):
+    return {k: v for k, v in dialog_state.items() if k not in _SENSITIVE_DIALOG_KEYS}
+  if isinstance(dialog_state, list):
+    return [
+      {k: v for k, v in item.items() if k not in _SENSITIVE_DIALOG_KEYS}
+      if isinstance(item, dict)
+      else item
+      for item in dialog_state
+    ]
+  return None
+
+
 # Names used before manifests carried an explicit `amount_minor` type
 LEGACY_AMOUNT_NAMES = ("amount_raw", "amount_numeric_estimate", "kobo", "sum")
 RECIPIENT_NAMES = ("recipient", "beneficiary")
@@ -309,7 +335,7 @@ class InterpreterService:
     manifest: list[dict[str, Any]],
     screen_descriptor: str | None = None,
     screen: Any = None,
-    dialog_state: dict[str, Any] | None = None,
+    dialog_state: dict[str, Any] | list[Any] | None = None,
     locale: str | None = None,
   ) -> InterpretResponse:
     """Interprets a user utterance against the allowed actions list across 8 languages.
@@ -358,10 +384,18 @@ class InterpreterService:
         actions_by_name[aname] = action
 
     # Handle dialog continuation if pending_action_id is set
-    if dialog_state and dialog_state.get("pending_action_id"):
+    if isinstance(dialog_state, dict) and dialog_state.get("pending_action_id"):
       pending_id = dialog_state["pending_action_id"]
-      if pending_id in actions_by_id:
-        roles = ParamRoles(actions_by_id[pending_id])
+      pending_action = (
+        actions_by_id.get(pending_id)
+        or actions_by_name.get(pending_id)
+        or actions_by_tool_name.get(pending_id)
+      )
+      if pending_action:
+        roles = ParamRoles(pending_action)
+        canonical_pending_id = (
+          pending_action.get("id") or pending_action.get("name") or pending_id
+        )
         # Only short-circuit when the pending action takes an amount and this
         # utterance supplies one; otherwise let the model handle the turn.
         parsed_kobo = parse_amount_to_kobo(utterance) if roles.amount else None
@@ -377,7 +411,7 @@ class InterpreterService:
           }
           merged_params.update(roles.amount_values(parsed_kobo))
           return self._build_action_outcome(
-            action_id=pending_id,
+            action_id=canonical_pending_id,
             roles=roles,
             params=merged_params,
             amount_kobo=parsed_kobo,
@@ -386,23 +420,7 @@ class InterpreterService:
           )
 
     # Sanitize dialog context: Never pass balances, beneficiary lists, passwords, or system messages
-    sanitized_dialog_state = None
-    if dialog_state:
-      sanitized_dialog_state = {
-        k: v
-        for k, v in dialog_state.items()
-        if k
-        not in [
-          "balance",
-          "beneficiaries",
-          "account_number",
-          "pin",
-          "bvn",
-          "password",
-          "last_system_message",
-          "value",
-        ]
-      }
+    sanitized_dialog_state = _sanitize_dialog_state(dialog_state)
 
     # Resolve screen descriptor
     desc = screen_descriptor
