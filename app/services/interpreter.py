@@ -178,9 +178,7 @@ def _populate_amount_params(
   raw_model_val: Any = None,
   utterance: str = "",
 ) -> None:
-  """Writes grounded amount_kobo into amount_minor/amount_kobo and declared manifest amount fields."""
-  params_out["amount_minor"] = amount_kobo
-  params_out["amount_kobo"] = amount_kobo
+  """Writes grounded amount into declared manifest amount fields only."""
   raw_matches_utterance = bool(
     raw_model_val and str(raw_model_val).lower() in utterance.lower()
   )
@@ -261,11 +259,18 @@ class InterpreterService:
     recipient_param_name: str | None,
     confidence: float,
     lang: str,
+    declared_params: dict[str, dict[str, Any]] | None = None,
   ) -> InterpretResponse:
     """Builds an `action` response, returning `missing_params` if required fields remain unfilled."""
     missing_params = [
       p_name for p_name in required_param_names if p_name not in verified_params
     ]
+
+    safe_params = (
+      {k: v for k, v in verified_params.items() if k in declared_params}
+      if declared_params
+      else verified_params
+    )
 
     if missing_params:
       has_missing_recip = bool(
@@ -281,7 +286,11 @@ class InterpreterService:
         c_reason = "missing_recipient"
       elif has_missing_amt:
         c_reason = "missing_amount"
-        recip_val = verified_params.get("recipient")
+        recip_val = (
+          verified_params.get(recipient_param_name)
+          if recipient_param_name
+          else (verified_params.get("recipient") or verified_params.get("beneficiary"))
+        )
         if recip_val:
           prompt = build_clarification_prompt(
             "missing_amount", recipient=recip_val, lang=lang
@@ -305,7 +314,7 @@ class InterpreterService:
       return self._build_response(
         outcome="action",
         action_id=canonical_action_id,
-        params=verified_params,
+        params=safe_params,
         missing_params=missing_params,
         confidence=confidence,
         message=prompt,
@@ -317,7 +326,22 @@ class InterpreterService:
     amount_kobo = (
       verified_params.get("amount_minor") or verified_params.get("amount_kobo") or 0
     )
-    recip_val = verified_params.get("recipient")
+    if not amount_kobo and amount_param_names:
+      for p_name in amount_param_names:
+        if p_name in verified_params:
+          val = verified_params[p_name]
+          if isinstance(val, int):
+            amount_kobo = val
+            break
+          elif isinstance(val, float):
+            amount_kobo = int(val * 100)
+            break
+
+    recip_val = (
+      verified_params.get(recipient_param_name)
+      if recipient_param_name
+      else (verified_params.get("recipient") or verified_params.get("beneficiary"))
+    )
     if recip_val and amount_kobo:
       spoken_text = build_transfer_confirmation_prompt(
         int(amount_kobo), str(recip_val), lang=lang
@@ -331,7 +355,7 @@ class InterpreterService:
     return self._build_response(
       outcome="action",
       action_id=canonical_action_id,
-      params=verified_params,
+      params=safe_params,
       missing_params=[],
       confidence=confidence,
       message=None,
@@ -428,6 +452,7 @@ class InterpreterService:
             recipient_param_name=recipient_param_name,
             confidence=0.95,
             lang=lang,
+            declared_params=declared_params,
           )
 
     # Sanitize dialog context: Never pass balances, beneficiary lists, passwords, or system messages
@@ -595,7 +620,8 @@ class InterpreterService:
           and cand_str.lower() in utterance.lower()
         ):
           verified_params[recipient_param_name] = cand_str
-          verified_params["recipient"] = cand_str
+          if "recipient" in declared_params:
+            verified_params["recipient"] = cand_str
 
     # 6c. Ground any other declared params from tool_args
     for p_name in declared_params:
@@ -626,4 +652,5 @@ class InterpreterService:
       recipient_param_name=recipient_param_name,
       confidence=llm_result.confidence,
       lang=lang,
+      declared_params=declared_params,
     )

@@ -8,22 +8,27 @@ from app.services.interpreter import InterpreterService
 
 MANIFEST = [
   {
+    "id": "get_balance",
     "name": "get_balance",
     "description": "Check account balance",
-    "parameters": {"type": "object", "properties": {}},
+    "params": [],
   },
   {
+    "id": "transfer_money",
     "name": "transfer_money",
     "description": "Transfer money to a recipient",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "amount_raw": {"type": "string"},
-        "amount_numeric_estimate": {"type": "number"},
-        "recipient": {"type": "string"},
+    "params": [
+      {
+        "name": "recipient",
+        "type": "string",
+        "required": True,
       },
-      "required": ["amount_raw", "recipient"],
-    },
+      {
+        "name": "amount_minor",
+        "type": "amount_minor",
+        "required": True,
+      },
+    ],
   },
 ]
 
@@ -112,7 +117,8 @@ async def test_yoruba_transfer_and_balance(service):
   assert res.type == "action"
   assert res.intent == "transfer_money"
   assert res.params["recipient"] == "David"
-  assert res.params["amount_kobo"] == 500_000
+  assert res.params["amount_minor"] == 500_000
+  assert "amount_kobo" not in res.params
   assert res.language == "yo"
   assert "Firanṣẹ" in res.spoken_prompt
 
@@ -129,10 +135,12 @@ async def test_igbo_transfer_and_balance(service):
   assert res.type == "action"
   assert res.intent == "transfer_money"
   assert res.params["recipient"] == "Amaka"
-  assert res.params["amount_kobo"] == 1_000_000
+  assert res.params["amount_minor"] == 1_000_000
+  assert "amount_kobo" not in res.params
   assert res.language == "ig"
   assert "Ziga" in res.spoken_prompt
 
+  # Igbo balance
   res_bal = await service.interpret_utterance("Kedu balance m", MANIFEST)
   assert res_bal.type == "action"
   assert res_bal.intent == "get_balance"
@@ -147,10 +155,12 @@ async def test_hausa_transfer_and_balance(service):
   assert res.type == "action"
   assert res.intent == "transfer_money"
   assert res.params["recipient"] == "Chinedu"
-  assert res.params["amount_kobo"] == 2_000_000
+  assert res.params["amount_minor"] == 2_000_000
+  assert "amount_kobo" not in res.params
   assert res.language == "ha"
   assert "Tura" in res.spoken_prompt
 
+  # Hausa balance
   res_bal = await service.interpret_utterance("Nawa ne kudi na", MANIFEST)
   assert res_bal.type == "action"
   assert res_bal.intent == "get_balance"
@@ -165,10 +175,12 @@ async def test_french_transfer_and_balance(service):
   assert res.type == "action"
   assert res.intent == "transfer_money"
   assert res.params["recipient"] == "David"
-  assert res.params["amount_kobo"] == 500_000
+  assert res.params["amount_minor"] == 500_000
+  assert "amount_kobo" not in res.params
   assert res.language == "fr"
   assert "Transférer" in res.spoken_prompt
 
+  # French balance
   res_bal = await service.interpret_utterance("Quel est mon solde", MANIFEST)
   assert res_bal.type == "action"
   assert res_bal.intent == "get_balance"
@@ -181,10 +193,12 @@ async def test_german_transfer_and_balance(service):
   assert res.type == "action"
   assert res.intent == "transfer_money"
   assert res.params["recipient"] == "David"
-  assert res.params["amount_kobo"] == 500_000
+  assert res.params["amount_minor"] == 500_000
+  assert "amount_kobo" not in res.params
   assert res.language == "de"
   assert "Überweise" in res.spoken_prompt
 
+  # German balance
   res_bal = await service.interpret_utterance("Wie ist mein Kontostand", MANIFEST)
   assert res_bal.type == "action"
   assert res_bal.intent == "get_balance"
@@ -197,10 +211,12 @@ async def test_spanish_transfer_and_balance(service):
   assert res.type == "action"
   assert res.intent == "transfer_money"
   assert res.params["recipient"] == "David"
-  assert res.params["amount_kobo"] == 500_000
+  assert res.params["amount_minor"] == 500_000
+  assert "amount_kobo" not in res.params
   assert res.language == "es"
   assert "Transferir" in res.spoken_prompt
 
+  # Spanish balance
   res_bal = await service.interpret_utterance("Cuál es mi saldo", MANIFEST)
   assert res_bal.type == "action"
   assert res_bal.intent == "get_balance"
