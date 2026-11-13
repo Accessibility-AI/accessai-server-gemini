@@ -41,10 +41,10 @@ sequenceDiagram
     Note over SDK: On-device STT captures speech.<br/>Packages utterance + action manifest + screen.
     SDK->>AI: POST /v1/interpret
     Note over AI: 1. LLM extracts raw: "5k", recipient: "David".<br/>2. Deterministic parser converts "5k" -> 500,000 kobo.<br/>3. Verifies zero guessing.<br/>4. Generates speech via template.
-    AI-->>SDK: Action: transfer_money, params={amount_kobo: 500000, recipient: "David"}
+    AI-->>SDK: Action: transfer_money, params={amount_minor: 500000, recipient: "David"}
     
-    SDK->>AI: POST /v1/confirmations/pending
-    AI-->>SDK: confirmation_id, prompt="Transfer 5,000 Naira to David. Say 'confirm' to proceed."
+    SDK->>AI: POST /v1/confirmations
+    AI-->>SDK: pending_id, prompt="Transfer 5,000 Naira to David. Say 'confirm' to proceed."
     SDK-->>User: Speaks prompt via Android TTS
     
     User->>SDK: Speaks "confirm" (Strict phrase, "yes" rejected)
@@ -71,40 +71,42 @@ sequenceDiagram
 ```json
 {
   "session_id": "sess_8f3d10c2",
-  "utterance": "abeg send 5k give David",
-  "manifest": [
+  "text": "abeg send 5k give David",
+  "actions": [
     {
-      "name": "transfer_money",
+      "id": "transfer_money",
+      "name": "send money",
       "description": "Transfer funds to another user",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "amount_raw": { "type": "string" },
-          "amount_numeric_estimate": { "type": "number" },
-          "recipient": { "type": "string" }
-        },
-        "required": ["amount_raw", "recipient"]
-      }
+      "sensitivity": "sensitive",
+      "requires_confirmation": true,
+      "params": [
+        { "name": "recipient", "type": "string", "description": "Name of recipient", "required": true },
+        { "name": "amount_minor", "type": "amount_minor", "description": "Amount in kobo", "required": true }
+      ]
     },
     {
-      "name": "get_balance",
-      "description": "Inquire account balance"
+      "id": "get_balance",
+      "name": "check balance",
+      "description": "Inquire account balance",
+      "sensitivity": "read",
+      "requires_confirmation": false,
+      "params": []
     }
   ],
   "screen_descriptor": "Home Dashboard",
-  "dialog_state": {}
+  "dialog": {}
 }
 ```
 - **Response (Action)**:
 ```json
 {
-  "type": "action",
-  "intent": "transfer_money",
+  "outcome": "action",
+  "action_id": "transfer_money",
   "params": {
     "recipient": "David",
-    "amount_raw": "5k",
-    "amount_kobo": 500000
+    "amount_minor": 500000
   },
+  "missing_params": [],
   "confidence": 0.95,
   "spoken_prompt": "Transfer 5,000 Naira to David. Say 'confirm' to proceed, or 'cancel' to abort."
 }
@@ -113,30 +115,29 @@ sequenceDiagram
 ---
 
 ### 3.2. Pending Confirmation
-- **Endpoint**: `POST /v1/confirmations/pending`
+- **Endpoint**: `POST /v1/confirmations`
 - **Request**:
 ```json
 {
   "session_id": "sess_8f3d10c2",
-  "action": "transfer_money",
+  "action_id": "transfer_money",
   "params": {
     "recipient": "David",
-    "amount_kobo": 500000,
-    "amount_raw": "5k"
+    "amount_minor": 500000
   }
 }
 ```
 - **Response**:
 ```json
 {
-  "confirmation_id": "conf_3b1a89c0",
+  "pending_id": "conf_3b1a89c0",
   "session_id": "sess_8f3d10c2",
-  "action": "transfer_money",
+  "action_id": "transfer_money",
   "params": {
     "recipient": "David",
-    "amount_kobo": 500000,
-    "amount_raw": "5k"
+    "amount_minor": 500000
   },
+  "params_sha256": "4a7d...canonical_sha256",
   "status": "pending",
   "spoken_prompt": "Transfer 5,000 Naira to David. Say 'confirm' to proceed, or 'cancel' to abort.",
   "expires_at": 1793649660

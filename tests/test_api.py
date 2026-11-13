@@ -16,22 +16,27 @@ def setup_test_env(monkeypatch):
 
 MANIFEST = [
   {
+    "id": "get_balance",
     "name": "get_balance",
     "description": "Check current account balance",
-    "parameters": {"type": "object", "properties": {}},
+    "params": [],
   },
   {
+    "id": "transfer_money",
     "name": "transfer_money",
     "description": "Transfer money to another account or person",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "amount_raw": {"type": "string"},
-        "amount_numeric_estimate": {"type": "number"},
-        "recipient": {"type": "string"},
+    "params": [
+      {
+        "name": "recipient",
+        "type": "string",
+        "required": True,
       },
-      "required": ["amount_raw", "recipient"],
-    },
+      {
+        "name": "amount_minor",
+        "type": "amount_minor",
+        "required": True,
+      },
+    ],
   },
 ]
 
@@ -88,6 +93,8 @@ async def test_full_api_workflow():
     assert interp["action_id"] == "transfer_money"
     assert interp["params"]["amount_minor"] == 500_000
     assert interp["params"]["recipient"] == "David"
+    assert "amount_kobo" not in interp["params"]
+    assert set(interp["params"].keys()) == {"recipient", "amount_minor"}
 
     # 5. POST /v1/confirmations
     res = await client.post(

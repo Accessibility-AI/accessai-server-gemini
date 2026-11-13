@@ -213,9 +213,6 @@ class GeminiProvider(BaseLLMProvider):
           headers=headers,
           json=payload,
         )
-        if response.status_code in (429, 503) and attempt < max_retries:
-          await asyncio.sleep(0.4)
-          continue
         response.raise_for_status()
         data = response.json()
         break
@@ -223,13 +220,16 @@ class GeminiProvider(BaseLLMProvider):
         status = e.response.status_code
         # Full upstream body goes to the server log only, never to clients
         logger.error(f"Gemini API error ({status}): {getattr(e.response, 'text', '')}")
-        if status in (429, 503) and attempt < max_retries:
+        retry_after = _gemini_retry_after(e.response) if status == 429 else None
+        # Only retry once on 503 or brief 429; don't burn quota when upstream gave a cooldown > 1s
+        should_retry = status == 503 or (
+          status == 429 and (retry_after is None or retry_after <= 1)
+        )
+        if should_retry and attempt < max_retries:
           await asyncio.sleep(0.4)
           continue
         if status == 429:
-          raise ProviderRateLimitedError(
-            "gemini", retry_after=_gemini_retry_after(e.response)
-          ) from e
+          raise ProviderRateLimitedError("gemini", retry_after=retry_after) from e
         raise RuntimeError(f"Gemini API request failed with status {status}") from e
       except httpx.TimeoutException as e:
         logger.error(f"Gemini API request timed out: {e}")

@@ -16,22 +16,27 @@ from app.services.interpreter import InterpreterService
 
 MANIFEST = [
   {
+    "id": "get_balance",
     "name": "get_balance",
     "description": "Check current account balance",
-    "parameters": {"type": "object", "properties": {}},
+    "params": [],
   },
   {
+    "id": "transfer_money",
     "name": "transfer_money",
     "description": "Transfer money to another account or person",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "amount_raw": {"type": "string"},
-        "amount_numeric_estimate": {"type": "number"},
-        "recipient": {"type": "string"},
+    "params": [
+      {
+        "name": "recipient",
+        "type": "string",
+        "required": True,
       },
-      "required": ["amount_raw", "recipient"],
-    },
+      {
+        "name": "amount_minor",
+        "type": "amount_minor",
+        "required": True,
+      },
+    ],
   },
 ]
 
@@ -102,10 +107,12 @@ async def run_evals(provider_name: str = "mock", limit: int | None = None) -> bo
           expected_recip = item.get("expected_recipient")
           expected_kobo = item.get("expected_kobo")
           recip_got = result.params.get("recipient")
-          kobo_got = result.params.get("amount_minor") or result.params.get(
-            "amount_kobo"
-          )
-          if recip_got == expected_recip and kobo_got == expected_kobo:
+          kobo_got = result.params.get("amount_minor")
+          if (
+            recip_got == expected_recip
+            and kobo_got == expected_kobo
+            and "amount_kobo" not in result.params
+          ):
             is_correct = True
         else:
           is_correct = True
