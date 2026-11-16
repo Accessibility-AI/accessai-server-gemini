@@ -137,6 +137,9 @@ async def create_session(
   }
 
 
+SESSION_TTL_SECONDS = 86400
+
+
 async def get_session(session_id: str) -> dict[str, Any] | None:
   async with aiosqlite.connect(settings.DATABASE_PATH) as db:
     db.row_factory = aiosqlite.Row
@@ -145,6 +148,9 @@ async def get_session(session_id: str) -> dict[str, Any] | None:
     ) as cursor:
       row = await cursor.fetchone()
       if not row:
+        return None
+      # Sessions expire after 24 hours per contract v1.1
+      if int(time.time()) > row["created_at"] + SESSION_TTL_SECONDS:
         return None
       row_keys = set(row.keys())
       dk_json = row["device_key_json"] if "device_key_json" in row_keys else None
