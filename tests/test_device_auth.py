@@ -8,17 +8,21 @@ from app.main import app
 
 MANIFEST = [
   {
+    "id": "transfer_money",
     "name": "transfer_money",
     "description": "Transfer funds to another user",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "amount_raw": {"type": "string"},
-        "amount_numeric_estimate": {"type": "number"},
-        "recipient": {"type": "string"},
+    "params": [
+      {
+        "name": "recipient",
+        "type": "string",
+        "required": True,
       },
-      "required": ["amount_raw", "recipient"],
-    },
+      {
+        "name": "amount_minor",
+        "type": "amount_minor",
+        "required": True,
+      },
+    ],
   }
 ]
 
@@ -67,7 +71,7 @@ async def test_device_auth_biometric_success_and_amr_claim():
     session_id = res.json()["session_id"]
 
     # 2. Create pending confirmation
-    params = {"amount_kobo": 500_000, "recipient": "Amina", "amount_raw": "5k"}
+    params = {"amount_minor": 500_000, "recipient": "Amina"}
     params_hash = hash_params(params)
     res = await client.post(
       "/v1/confirmations/pending",
@@ -131,7 +135,7 @@ async def test_device_auth_device_credential_success():
     )
     session_id = res.json()["session_id"]
 
-    params = {"amount_kobo": 1_000_000, "recipient": "Emeka", "amount_raw": "10k"}
+    params = {"amount_minor": 1_000_000, "recipient": "Emeka"}
     params_hash = hash_params(params)
     res = await client.post(
       "/v1/confirmations/pending",
@@ -183,7 +187,7 @@ async def test_reject_proof_signed_by_wrong_key():
     )
     session_id = res.json()["session_id"]
 
-    params = {"amount_kobo": 500_000, "recipient": "David"}
+    params = {"amount_minor": 500_000, "recipient": "David"}
     res = await client.post(
       "/v1/confirmations/pending",
       json={
@@ -233,7 +237,7 @@ async def test_reject_mismatched_kid():
     )
     session_id = res.json()["session_id"]
 
-    params = {"amount_kobo": 200_000, "recipient": "Tunde"}
+    params = {"amount_minor": 200_000, "recipient": "Tunde"}
     res = await client.post(
       "/v1/confirmations/pending",
       json={
@@ -274,7 +278,7 @@ async def test_reject_tampered_payload():
     )
     session_id = res.json()["session_id"]
 
-    params = {"amount_kobo": 500_000, "recipient": "David"}
+    params = {"amount_minor": 500_000, "recipient": "David"}
     res = await client.post(
       "/v1/confirmations/pending",
       json={
@@ -325,7 +329,7 @@ async def test_reject_missing_auth_when_device_key_registered():
       json={
         "session_id": session_id,
         "action": "transfer_money",
-        "params": {"amount_kobo": 100_000, "recipient": "Ngozi"},
+        "params": {"amount_minor": 100_000, "recipient": "Ngozi"},
       },
     )
     pending_id = res.json()["confirmation_id"]
@@ -353,7 +357,7 @@ async def test_direct_confirm_endpoint():
     )
     session_id = res.json()["session_id"]
 
-    params = {"amount_kobo": 300_000, "recipient": "Bisi", "amount_raw": "3k"}
+    params = {"amount_minor": 300_000, "recipient": "Bisi"}
     res = await client.post(
       "/v1/confirmations/pending",
       json={

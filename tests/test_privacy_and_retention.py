@@ -9,22 +9,27 @@ from app.utils.logger import mask_pii, mask_utterance
 
 MANIFEST = [
   {
+    "id": "get_balance",
     "name": "get_balance",
     "description": "Check current account balance",
-    "parameters": {"type": "object", "properties": {}},
+    "params": [],
   },
   {
+    "id": "transfer_money",
     "name": "transfer_money",
     "description": "Transfer money to another account or person",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "amount_raw": {"type": "string"},
-        "amount_numeric_estimate": {"type": "number"},
-        "recipient": {"type": "string"},
+    "params": [
+      {
+        "name": "recipient",
+        "type": "string",
+        "required": True,
       },
-      "required": ["amount_raw", "recipient"],
-    },
+      {
+        "name": "amount_minor",
+        "type": "amount_minor",
+        "required": True,
+      },
+    ],
   },
 ]
 

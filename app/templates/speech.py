@@ -80,6 +80,20 @@ def build_clarification_prompt(
       }
     return prompts.get(lang, prompts["en"])
 
+  elif reason == "missing_payment_amount":
+    # Payments with no recipient (bills, airtime): ask how much to pay, not send
+    prompts = {
+      "en": "How much would you like to pay?",
+      "pcm": "How much you wan pay?",
+      "yo": "Iye owo melo ni ẹ fẹ san?",
+      "ig": "Ego ole ka ị chọrọ ịkwụ?",
+      "ha": "Nawa kake son biya?",
+      "fr": "Combien souhaitez-vous payer ?",
+      "de": "Wie viel möchten Sie bezahlen?",
+      "es": "¿Cuánto le gustaría pagar?",
+    }
+    return prompts.get(lang, prompts["en"])
+
   elif reason == "missing_amount_and_recipient":
     prompts = {
       "en": "Who would you like to send money to, and how much?",
@@ -175,6 +189,40 @@ def build_confirmed_prompt(amount_kobo: int, recipient: str, lang: str = "en") -
     "fr": f"Transfert de {formatted_amount} à {recipient} confirmé.",
     "de": f"Überweisung von {formatted_amount} an {recipient} bestätigt.",
     "es": f"Transferencia de {formatted_amount} a {recipient} confirmada.",
+  }
+  return prompts.get(lang, prompts["en"])
+
+
+def build_action_confirmation_prompt(
+  action_id: str, amount_kobo: int, recipient: str | None, lang: str = "en"
+) -> str:
+  """Spoken prompt asking the user to confirm an action, read back from grounded values."""
+  if amount_kobo and recipient:
+    return build_transfer_confirmation_prompt(
+      int(amount_kobo), str(recipient), lang=lang
+    )
+  action_label = action_id.replace("_", " ")
+  if amount_kobo:
+    naira = int(amount_kobo) / 100
+    return f"Pay {naira:,.0f} Naira for {action_label}. Say 'confirm' to proceed, or 'cancel' to abort."
+  return f"Please confirm {action_label}."
+
+
+def build_action_confirmed_prompt(
+  amount_kobo: int, recipient: str | None, lang: str = "en"
+) -> str:
+  """Prompt after a token is minted. Falls back to a generic message without a transfer."""
+  if amount_kobo and recipient:
+    return build_confirmed_prompt(int(amount_kobo), str(recipient), lang=lang)
+  prompts = {
+    "en": "Confirmed.",
+    "pcm": "E don confirm.",
+    "yo": "A ti jẹrisi.",
+    "ig": "Akwadola.",
+    "ha": "An tabbatar.",
+    "fr": "Confirmé.",
+    "de": "Bestätigt.",
+    "es": "Confirmado.",
   }
   return prompts.get(lang, prompts["en"])
 
