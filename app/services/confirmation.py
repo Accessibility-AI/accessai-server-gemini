@@ -15,11 +15,12 @@ from app.db.database import (
   save_confirmation_token,
   update_confirmation_status,
 )
+from app.parsers.amount_parser import parse_amount_to_kobo
 from app.parsers.language import detect_language
 from app.templates.speech import (
+  build_action_confirmation_prompt,
+  build_action_confirmed_prompt,
   build_cancelled_prompt,
-  build_confirmed_prompt,
-  build_transfer_confirmation_prompt,
 )
 
 # Multilingual strict confirmation phrases across 8 languages/dialects
@@ -124,6 +125,40 @@ def is_strict_confirmation(utterance: str) -> bool:
   )
 
 
+def spoken_amount_and_recipient(params: dict[str, Any]) -> tuple[int, str]:
+  """Amount (kobo) and recipient to read back, whatever names the manifest declared.
+
+  Interpret returns only manifest-declared params, so `amount_minor` and `recipient`
+  may be named differently (e.g. `amount`, `beneficiary`). Prefer the contract names,
+  then fall back to the first param whose name marks it as an amount or recipient.
+  """
+  amount: Any = params.get("amount_minor") or params.get("amount_kobo")
+  if not amount:
+    for key, val in params.items():
+      k = key.lower()
+      if "amount" in k or k in ("kobo", "sum"):
+        if isinstance(val, bool):
+          continue
+        if isinstance(val, int):
+          amount = val
+        elif isinstance(val, float):
+          amount = round(val * 100)
+        elif isinstance(val, str):
+          amount = parse_amount_to_kobo(val)
+        if amount:
+          break
+
+  recipient: Any = params.get("recipient") or params.get("beneficiary")
+  if not recipient:
+    for key, val in params.items():
+      k = key.lower()
+      if ("recipient" in k or "beneficiary" in k) and isinstance(val, str) and val:
+        recipient = val
+        break
+
+  return int(amount or 0), str(recipient or "")
+
+
 class ConfirmationService:
   @staticmethod
   async def create_pending(
@@ -141,16 +176,10 @@ class ConfirmationService:
 
     p_hash = hash_params(params)
 
-    # Build deterministic spoken prompt for the pending confirmation
-    amount_kobo = params.get("amount_minor") or params.get("amount_kobo") or 0
-    recipient = params.get("recipient", "")
-
-    if action == "transfer_money" and amount_kobo and recipient:
-      spoken = build_transfer_confirmation_prompt(
-        int(amount_kobo), str(recipient), lang=lang
-      )
-    else:
-      spoken = f"Please confirm {action.replace('_', ' ')}."
+    # Build deterministic spoken prompt for the pending confirmation, reading back
+    # the amount and recipient for any action that has them
+    amount_kobo, recipient = spoken_amount_and_recipient(params)
+    spoken = build_action_confirmation_prompt(action, amount_kobo, recipient, lang=lang)
 
     record = await create_pending_confirmation(
       session_id=session_id,
@@ -374,11 +403,8 @@ class ConfirmationService:
         session.get("locale", "en")[:2] if session and session.get("locale") else "en"
       )
     )
-    amount_kobo = record["params"].get("amount_minor") or record["params"].get(
-      "amount_kobo", 0
-    )
-    recipient = record["params"].get("recipient", "")
-    spoken = build_confirmed_prompt(int(amount_kobo), str(recipient), lang=lang)
+    amount_kobo, recipient = spoken_amount_and_recipient(record["params"])
+    spoken = build_action_confirmed_prompt(amount_kobo, recipient, lang=lang)
 
     iso_exp = datetime.fromtimestamp(payload["exp"], UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
