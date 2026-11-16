@@ -11,28 +11,29 @@ from app.services.interpreter import InterpreterService
 
 MANIFEST = [
   {
+    "id": "get_balance",
     "name": "get_balance",
     "description": "Check current account balance",
-    "parameters": {"type": "object", "properties": {}},
+    "params": [],
   },
   {
+    "id": "transfer_money",
     "name": "transfer_money",
     "description": "Transfer money to another account or person",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "amount_raw": {
-          "type": "string",
-          "description": "Raw spoken amount phrase",
-        },
-        "amount_numeric_estimate": {
-          "type": "number",
-          "description": "Estimated numeric Naira value",
-        },
-        "recipient": {"type": "string", "description": "Name of recipient"},
+    "params": [
+      {
+        "name": "recipient",
+        "type": "string",
+        "description": "Name of recipient",
+        "required": True,
       },
-      "required": ["amount_raw", "recipient"],
-    },
+      {
+        "name": "amount_minor",
+        "type": "amount_minor",
+        "description": "Amount in kobo",
+        "required": True,
+      },
+    ],
   },
 ]
 
@@ -188,7 +189,8 @@ async def test_gemini_end_to_end_interpreter_transfer():
   assert res.type == "action"
   assert res.intent == "transfer_money"
   assert res.params["recipient"] == "David"
-  assert res.params["amount_kobo"] == 500_000
+  assert res.params["amount_minor"] == 500_000
+  assert "amount_kobo" not in res.params
   assert "5,000 Naira" in res.spoken_prompt
   assert "David" in res.spoken_prompt
 

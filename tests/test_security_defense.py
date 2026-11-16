@@ -6,22 +6,27 @@ from app.main import app
 
 MANIFEST = [
   {
+    "id": "transfer_money",
     "name": "transfer_money",
     "description": "Transfer funds to another user",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "amount_raw": {"type": "string"},
-        "amount_numeric_estimate": {"type": "number"},
-        "recipient": {"type": "string"},
+    "params": [
+      {
+        "name": "recipient",
+        "type": "string",
+        "required": True,
       },
-      "required": ["amount_raw", "recipient"],
-    },
+      {
+        "name": "amount_minor",
+        "type": "amount_minor",
+        "required": True,
+      },
+    ],
   },
   {
+    "id": "get_balance",
     "name": "get_balance",
     "description": "Check current balance",
-    "parameters": {"type": "object", "properties": {}},
+    "params": [],
   },
 ]
 
