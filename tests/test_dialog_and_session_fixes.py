@@ -216,3 +216,133 @@ async def test_gemini_429_with_cooldown_fails_fast_while_503_retries_once():
   result = await p_503.interpret("send 5k to David", [TRANSFER_ACTION])
   assert calls_503 == 2
   assert len(result.tool_calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_dialog_continuation_filters_client_filled_params():
+  provider = _RecordingProvider()
+  service = InterpreterService(provider=provider)
+  action = {
+    "id": "send",
+    "params": [
+      {"name": "beneficiary", "type": "string", "required": True},
+      {"name": "amount", "type": "amount_minor", "required": True},
+    ],
+  }
+  res = await service.interpret_utterance(
+    utterance="5000",
+    manifest=[action],
+    dialog_state={
+      "pending_action_id": "send",
+      "filled_params": {"beneficiary": "David", "amount_kobo": 100, "pin": "1234"},
+    },
+  )
+  # Undeclared and stale client values are dropped; the amount comes from this turn
+  assert res.params == {"beneficiary": "David", "amount": 500_000}
+  assert "5,000 Naira" in res.spoken_prompt
+  assert "1 Naira" not in res.spoken_prompt
+
+
+@pytest.mark.asyncio
+async def test_dialog_continuation_without_amount_param_uses_the_model():
+  provider = _RecordingProvider()
+  service = InterpreterService(provider=provider)
+  no_amount_action = {
+    "id": "add_beneficiary",
+    "params": [{"name": "recipient", "type": "string", "required": True}],
+  }
+  res = await service.interpret_utterance(
+    utterance="send 2000 to Bola",
+    manifest=[no_amount_action],
+    dialog_state={
+      "pending_action_id": "add_beneficiary",
+      "filled_params": {"recipient": "David"},
+    },
+  )
+  # No shortcut: the model was consulted (it returned no tool call here)
+  assert provider.last_dialog_state is not None
+  assert res.outcome == "unsupported"
+
+
+@pytest.mark.asyncio
+async def test_action_with_no_declared_params_returns_no_params():
+  provider = _RecordingProvider()
+  service = InterpreterService(provider=provider)
+  res = await service.interpret_utterance(
+    utterance="2000",
+    manifest=[{"id": "freeze_card", "params": []}],
+    dialog_state={
+      "pending_action_id": "freeze_card",
+      "filled_params": {"amount_kobo": 500_000, "pin": "1234"},
+    },
+  )
+  assert res.params == {}
+
+
+@pytest.mark.asyncio
+async def test_string_amount_and_custom_recipient_are_read_back():
+  provider = _RecordingProvider(
+    tool_calls=[
+      ToolCall(name="send", arguments={"beneficiary": "David", "amount_raw": "5k"})
+    ]
+  )
+  service = InterpreterService(provider=provider)
+  res = await service.interpret_utterance(
+    utterance="send 5k to David",
+    manifest=[
+      {
+        "id": "send",
+        "params": [
+          {"name": "beneficiary", "type": "string", "required": True},
+          {"name": "amount_raw", "type": "string", "required": True},
+        ],
+      }
+    ],
+  )
+  assert res.params == {"beneficiary": "David", "amount_raw": "5k"}
+  assert "5,000 Naira" in res.spoken_prompt
+  assert "David" in res.spoken_prompt
+
+
+@pytest.mark.asyncio
+async def test_gemini_brief_429_waits_for_retry_after(monkeypatch):
+  slept: list[float] = []
+
+  async def fake_sleep(seconds):
+    slept.append(seconds)
+
+  monkeypatch.setattr("app.providers.gemini_provider.asyncio.sleep", fake_sleep)
+  calls = 0
+
+  def handle(request):
+    nonlocal calls
+    calls += 1
+    if calls == 1:
+      return httpx.Response(429, headers={"retry-after": "1"}, json={"error": {}})
+    return httpx.Response(
+      200,
+      json={
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "functionCall": {
+                    "name": "transfer_money",
+                    "args": {"recipient": "David", "amount_raw": "5k"},
+                  }
+                }
+              ]
+            },
+            "finishReason": "STOP",
+          }
+        ]
+      },
+    )
+
+  p = GeminiProvider(
+    api_key="test-key", client=httpx.AsyncClient(transport=httpx.MockTransport(handle))
+  )
+  await p.interpret("send 5k to David", [TRANSFER_ACTION])
+  assert calls == 2
+  assert slept == [1]

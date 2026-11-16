@@ -226,7 +226,8 @@ class GeminiProvider(BaseLLMProvider):
           status == 429 and (retry_after is None or retry_after <= 1)
         )
         if should_retry and attempt < max_retries:
-          await asyncio.sleep(0.4)
+          # Wait at least as long as upstream asked before the single retry
+          await asyncio.sleep(max(0.4, retry_after or 0))
           continue
         if status == 429:
           raise ProviderRateLimitedError("gemini", retry_after=retry_after) from e
